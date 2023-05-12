@@ -56,6 +56,9 @@ private slots:
     void on_cboClass_checkbox_changed(const QModelIndex&, const QModelIndex&, QList<int> roles);
     void on_cboFunction_checkbox_changed(const QModelIndex&, const QModelIndex&, QList<int> roles);
     void on_cboLevel_checkbox_changed(const QModelIndex&, const QModelIndex&, QList<int>roles);
+    void on_cboPID_checkbox_changed(const QModelIndex& topLeft, const QModelIndex&, QList<int> );
+    void on_cboTID_checkbox_changed(const QModelIndex& topLeft, const QModelIndex&, QList<int> );
+
     void on_double_click(const CLogEntry& entry);
 private:
     QHBoxLayout *m_hlayout;
@@ -92,6 +95,12 @@ private:
     QCheckableModel *cboFunctionModel;
     QPushButton *btnFunctionFilter;
     QPushButton *btnClearFunctionFilter;
+    QLabel *lblPID;
+    QComboBox *cboPID;
+    QCheckableModel *cboPIDModel;
+    QLabel *lblTID;
+    QComboBox *cboTID;
+    QCheckableModel *cboTIDModel;
 
     QGroupBox *gbxFilter;
     QCheckBox *cbxCaseSensitive;
@@ -137,6 +146,8 @@ private:
     void update_classFilter(void);
     void update_functionFilter(void);
     void update_traceLevels(void);
+    void update_tidFilter(void);
+    void update_pidFilter(void);
     void update_current_tab(void);
     void update_config_settings(std::shared_ptr<CConfigSettings>& configSettings);
 

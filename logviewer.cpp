@@ -56,6 +56,12 @@ LogViewer::LogViewer(std::shared_ptr<CTracer> tracer, QWidget *parent)
     , cboFunction(nullptr)
     , cboFunctionModel(nullptr)
     , btnFunctionFilter(nullptr)
+    , lblPID(nullptr)
+    , cboPID(nullptr)
+    , cboPIDModel(nullptr)
+    , lblTID(nullptr)
+    , cboTID(nullptr)
+    , cboTIDModel(nullptr)
     , gbxFilter(nullptr)
     , cbxCaseSensitive(nullptr)
     , lblSearch(nullptr)
@@ -268,6 +274,36 @@ LogViewer::~LogViewer()
             delete cboFunctionModel;
             cboFunctionModel = nullptr;
         }
+        if (lblPID != nullptr)
+        {
+            delete lblPID;
+            lblPID = nullptr;
+        }
+        if (cboPIDModel != nullptr)
+        {
+            delete cboPIDModel;
+            cboPIDModel = nullptr;
+        }
+        if (cboPID != nullptr)
+        {
+            delete cboPID;
+            cboPID = nullptr;
+        }
+        if (lblTID != nullptr)
+        {
+            delete lblTID;
+            lblTID = nullptr;
+        }
+        if (cboTIDModel != nullptr)
+        {
+            delete cboTIDModel;
+            cboTIDModel = nullptr;
+        }
+        if (cboTID != nullptr)
+        {
+            delete cboTID;
+            cboTID = nullptr;
+        }
         if (btnFunctionFilter != nullptr)
         {
             delete btnFunctionFilter;
@@ -387,6 +423,8 @@ void LogViewer::init_styles(void)
         lblLevel->setStyleSheet("QLabel:disabled{color:grey;}QLabel:enabled{color:black;font-weight:bold;}");
         lblSearch->setStyleSheet("QLabel:disabled{color:grey;}QLabel:enabled{color:black;font-weight:bold;}");
         lblStartTime->setStyleSheet("QLabel:disabled{color:grey;}QLabel:enabled{color:black;font-weight:bold;}");
+        lblPID->setStyleSheet("QLabel:disabled{color:grey;}QLabel:enabled{color:black;font-weight:bold;}");
+        lblTID->setStyleSheet("QLabel:disabled{color:grey;}QLabel:enabled{color:black;font-weight:bold;}");
     }
     catch(std::exception& ex)
     {
@@ -554,10 +592,10 @@ void LogViewer::init_createFunctionFilteringGroupBox(void)
 
         lblClass = new QLabel(gbxFunctionFiltering);
         lblClass->setObjectName("lblClass");
-        lblClass->setGeometry(QRect(40, 50, 67, 25));
+        lblClass->setGeometry(QRect(20, 40, 67, 25));
         lblFunction = new QLabel(gbxFunctionFiltering);
         lblFunction->setObjectName("lblFunction");
-        lblFunction->setGeometry(QRect(40, 80, 67, 25));
+        lblFunction->setGeometry(QRect(20, 70, 100, 25));
         cboFunction = new QComboBox(gbxFunctionFiltering);
         cboFunction->setObjectName("cboFunction");
         cboFunction->setGeometry(QRect(110, 70, 501, 25));
@@ -565,12 +603,34 @@ void LogViewer::init_createFunctionFilteringGroupBox(void)
         cboFunction->setModel(cboFunctionModel);
         connect(cboFunctionModel, &QCheckableModel::dataChanged, this, &LogViewer::on_cboFunction_checkbox_changed);
 
+        lblPID = new QLabel(gbxFunctionFiltering);
+        lblPID->setObjectName("lblPID");
+        lblPID->setGeometry(QRect(20, 100, 50, 25));
+        cboPID = new QComboBox(gbxFunctionFiltering);
+        cboPID->setObjectName("cboPID");
+        cboPID->setGeometry(QRect(110, 100, 100, 25));
+        cboPIDModel = new QCheckableModel(m_trace, "cboPIDModel");
+        cboPID->setModel(cboPIDModel);
+        connect(cboPIDModel, &QCheckableModel::dataChanged, this, &LogViewer::on_cboPID_checkbox_changed);
+
+        lblTID = new QLabel(gbxFunctionFiltering);
+        lblTID->setObjectName("lblTID");
+        lblTID->setGeometry(QRect(215, 100, 10, 25));
+        cboTID= new QComboBox(gbxFunctionFiltering);
+        cboTID->setObjectName("cboTID");
+        cboTID->setGeometry(QRect(230, 100, 100, 25));
+        cboTIDModel = new QCheckableModel(m_trace, "cboTIDModel");
+        cboTID->setModel(cboTIDModel);
+        connect(cboTIDModel, &QCheckableModel::dataChanged, this, &LogViewer::on_cboTID_checkbox_changed);
+
+
+
         btnFunctionFilter = new QPushButton(gbxFunctionFiltering);
         btnFunctionFilter->setObjectName("btnFunctionFilter");
-        btnFunctionFilter->setGeometry(QRect(470, 110, 141, 25));
+        btnFunctionFilter->setGeometry(QRect(470, 100, 141, 25));
         btnClearFunctionFilter = new QPushButton(gbxFunctionFiltering);
         btnClearFunctionFilter->setObjectName("btnClearFunctionFilter");
-        btnClearFunctionFilter->setGeometry(QRect(380,110, 75,25));
+        btnClearFunctionFilter->setGeometry(QRect(380,100, 75,25));
         m_hlayout->addWidget(gbxFunctionFiltering);
     }
     catch(std::exception& ex)
@@ -598,10 +658,10 @@ void LogViewer::init_createLevelFilteringGroupBox(void)
         gbxLevel->setInputMethodHints(Qt::ImhNone);
         lblLevel = new QLabel(gbxLevel);
         lblLevel->setObjectName("lblLevel");
-        lblLevel->setGeometry(QRect(10, 60, 67, 25));
+        lblLevel->setGeometry(QRect(10, 70, 67, 25));
         cboLevel = new QComboBox(gbxLevel);
         cboLevel->setObjectName("cboLevel");
-        cboLevel->setGeometry(QRect(70, 60, 201, 25));
+        cboLevel->setGeometry(QRect(70, 70, 201, 25));
         cbo_levelModel = new QCheckableModel(m_trace, "cbo_levelModel");
         cboLevel->setModel(cbo_levelModel);
         connect(cbo_levelModel, &QCheckableModel::dataChanged,
@@ -609,10 +669,10 @@ void LogViewer::init_createLevelFilteringGroupBox(void)
 
         btnLevelFiltering = new QPushButton(gbxLevel);
         btnLevelFiltering->setObjectName("btnLevelFiltering");
-        btnLevelFiltering->setGeometry(QRect(130, 110, 141, 25));
+        btnLevelFiltering->setGeometry(QRect(130, 100, 141, 25));
         btnClearLevelFiltering = new QPushButton(gbxLevel);
         btnClearLevelFiltering->setObjectName("btnClearFilter");
-        btnClearLevelFiltering->setGeometry(QRect(50,110,75,25));
+        btnClearLevelFiltering->setGeometry(QRect(50,100,75,25));
         m_hlayout->addWidget(gbxLevel);
     }
     catch(std::exception& ex)
@@ -685,6 +745,8 @@ void LogViewer::init_retranslateUi(void)
         btnClearFunctionFilter->setText(QCoreApplication::translate("LogViewer", "Clear", nullptr));
         gbxLevel->setTitle(QCoreApplication::translate("LogViewer", "Level Filtering", nullptr));
         lblLevel->setText(QCoreApplication::translate("LogViewer", "Level", nullptr));
+        lblPID->setText(QCoreApplication::translate("LogViewer", "PID : TID", nullptr));
+        lblTID->setText(QCoreApplication::translate("LogViewer", ":", nullptr));
         btnLevelFiltering->setText(QCoreApplication::translate("LogViewer", "Level Filter", nullptr));
         btnClearLevelFiltering->setText(QCoreApplication::translate("LogViewer", "Clear", nullptr));
 
@@ -776,6 +838,54 @@ void LogViewer::update_traceLevels(void)
     catch(std::exception& ex)
     {
         trace.Error("Exception occured : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+void LogViewer::update_tidFilter(void)
+{
+    CFuncTracer trace("LogViewer::update_tidFilter", m_trace);
+    try
+    {
+        if (m_currentLogFile.get() != nullptr)
+        {
+            std::map<std::string, bool> tids = m_currentLogFile->GetTIDs();
+
+            //clear combo box
+            cboTID->clear();
+            //Add to combo box
+            cboTIDModel->append(tids);
+        }
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+void LogViewer::update_pidFilter(void)
+{
+    CFuncTracer trace("LogViewer::update_pidFilter", m_trace);
+    try
+    {
+        if (m_currentLogFile.get() != nullptr)
+        {
+            std::map<std::string, bool> pids = m_currentLogFile->GetPIDs();
+
+            //clear combo box
+            cboPID->clear();
+            //Add to combo box
+            cboPIDModel->append(pids);
+        }
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
     }
     catch(...)
     {
@@ -1096,6 +1206,10 @@ void LogViewer::onTabChanged(int index)
                 timer.SetTime("functionFilter is updated!");
                 update_traceLevels();
                 timer.SetTime("traceLevels are updated!");
+                update_pidFilter();
+                timer.SetTime("pids are updated");
+                update_tidFilter();
+                timer.SetTime("tids are updated");
                 update_current_tab();
                 timer.SetTime("Current tab is updated");
             }
@@ -1345,6 +1459,59 @@ void LogViewer::on_cboLevel_checkbox_changed(const QModelIndex& topLeft, const Q
         trace.Error("Exception occurred");
     }
 }
+void LogViewer::on_cboPID_checkbox_changed(const QModelIndex& topLeft, const QModelIndex&, QList<int> )
+{
+    CFuncTracer trace("LogViewer::on_cboPID_checkbox_changed", m_trace);
+    try
+    {
+        if (cboPID != nullptr)
+        {
+            std::string sPid = cboPID->itemText(topLeft.row()).toStdString();
+            bool bChecked = (cboPID->itemData(topLeft.row(), Qt::CheckStateRole) == Qt::Checked);
+            if (bChecked == false)
+                m_currentLogFile->UpdatePID(true, sPid);
+            else
+                m_currentLogFile->UpdatePID(false, sPid);
+        }
+        else
+            trace.Warning("cboPID is nullptr");
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+void LogViewer::on_cboTID_checkbox_changed(const QModelIndex& topLeft, const QModelIndex&, QList<int> )
+{
+    CFuncTracer trace("LogViewer::on_cboTID_checkbox_changed", m_trace);
+    try
+    {
+        if (cboTID != nullptr)
+        {
+            std::string sTid = cboTID->itemText(topLeft.row()).toStdString();
+            bool bChecked = (cboTID->itemData(topLeft.row(), Qt::CheckStateRole) == Qt::Checked);
+            if (bChecked == false)
+                m_currentLogFile->UpdateTID(true, sTid);
+            else
+                m_currentLogFile->UpdateTID(false, sTid);
+        }
+        else
+            trace.Warning("cboTID is nullptr");
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+
 void LogViewer::on_double_click(const CLogEntry& entry)
 {
     CFuncTracer trace("LogViewer::on_double_click", m_trace);
@@ -1449,10 +1616,44 @@ void LogViewer::open()
                 update_current_tab();
             });
             logFileWidget->RegisterDropDown_ProcID([=, &trace](const std::string& procID){
-                trace.Trace("Drop down pocess id selected (process id : %s)", procID);
+                trace.Trace("Drop down pocess id selected (process id : %s)", procID.c_str());
+                std::map<std::string, bool> pids = m_currentLogFile->GetPIDs();
+                if (pids.find(procID) != pids.end())
+                {
+                    pids[procID] = false;
+                    m_currentLogFile->UpdatePID(true, procID);
+                    // clear combo box
+                    cboPID->clear();
+                    // Add to combo box
+                    cboPIDModel->append(pids);
+
+                    // Perform the filtering
+                    m_currentLogFile->ClearFilter();
+                    m_currentLogFile->SetProcIdFilter();
+
+                    // Update GUI
+                    update_current_tab();
+                }
             });
             logFileWidget->RegisterDropDown_ThreadID([=, &trace](const std::string& threadID){
-                trace.Trace("Drop down thread id selectd (thread id : %s)", threadID);
+                trace.Trace("Drop down thread id selectd (thread id : %s)", threadID.c_str());
+                std::map<std::string, bool> tids = m_currentLogFile->GetTIDs();
+                if (tids.find(threadID) != tids.end())
+                {
+                    tids[threadID] = false;
+                    m_currentLogFile->UpdateTID(true, threadID);
+                    // clear combo box
+                    cboTID->clear();
+                    // Add to combo box
+                    cboTIDModel->append(tids);
+
+                    // Perform the filtering
+                    m_currentLogFile->ClearFilter();
+                    m_currentLogFile->SetThreadIdFilter();
+
+                    // Update GUI
+                    update_current_tab();
+                }
             });
             logFileWidget->RegisterDropDown_MarkToggle([=, &trace](QModelIndex index){
                 QLogFileWidget *current_tab = dynamic_cast<QLogFileWidget*>(tabWidget->widget(m_currentTabIdx));

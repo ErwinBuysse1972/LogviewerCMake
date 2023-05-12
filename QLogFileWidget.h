@@ -1037,21 +1037,21 @@ private slots:
 
     void init_createActions(void)
     {
-        actNotifyStartDateTime = new QAction(tr("Copy start date time"), this);
+        actNotifyStartDateTime = new QAction(tr("Filter start time "), this);
         connect(actNotifyStartDateTime, &QAction::triggered, this, &QLogFileWidget::notifyStartDateTime);
-        actNotifyStopDateTime = new QAction(tr("Copy stop date time"), this);
+        actNotifyStopDateTime = new QAction(tr("Filter stop time"), this);
         connect(actNotifyStopDateTime, &QAction::triggered, this, &QLogFileWidget::notifyStopDateTime);
-        actNotifyProcessID = new QAction(tr("Copy processId"), this);
+        actNotifyProcessID = new QAction(tr("Filter process ID"), this);
         connect(actNotifyProcessID, &QAction::triggered, this, &QLogFileWidget::notifyProcessId);
-        actNotifyThreadID = new QAction(tr("Copy threadId"), this);
+        actNotifyThreadID = new QAction(tr("Filter thread ID"), this);
         connect(actNotifyThreadID, &QAction::triggered, this, &QLogFileWidget::notifyThreadID);
         actNotifyMarkToggle = new QAction(tr("Toggle Mark"), this);
         connect(actNotifyMarkToggle, &QAction::triggered, this, &QLogFileWidget::toggleMark);
-        actNotifyDisableClass = new QAction(tr("Disable class"), this);
+        actNotifyDisableClass = new QAction(tr("Filter class"), this);
         connect(actNotifyDisableClass, &QAction::triggered, this, &QLogFileWidget::disableClass);
-        actNotifyDisableFunction = new QAction(tr("Disable function"), this);
+        actNotifyDisableFunction = new QAction(tr("Filter function"), this);
         connect(actNotifyDisableFunction, &QAction::triggered, this, &QLogFileWidget::disablefunction);
-        actNotifyDisableTraceLevel = new QAction(tr("Disable tracelevel"), this);
+        actNotifyDisableTraceLevel = new QAction(tr("Filter tracelevel"), this);
         connect(actNotifyDisableTraceLevel, &QAction::triggered, this, &QLogFileWidget::disableTraceLevel);
     }
     void init_createForm(std::vector<CLogEntry> entries)
@@ -1064,6 +1064,8 @@ private slots:
             m_View->RegisterRightClick([=](QModelIndex index, QPoint pos){
                 m_notIndex = index;
                 QMenu menu(this);
+                if (actNotifyMarkToggle != nullptr)
+                    menu.addAction(actNotifyMarkToggle);
                 if (actNotifyStartDateTime != nullptr)
                     menu.addAction(actNotifyStartDateTime);
                 if (actNotifyStopDateTime != nullptr)
@@ -1072,8 +1074,6 @@ private slots:
                     menu.addAction(actNotifyProcessID);
                 if (actNotifyThreadID != nullptr)
                     menu.addAction(actNotifyThreadID);
-                if (actNotifyMarkToggle != nullptr)
-                    menu.addAction(actNotifyMarkToggle);
                 if (actNotifyDisableFunction != nullptr)
                     menu.addAction(actNotifyDisableFunction);
                 if (actNotifyDisableTraceLevel != nullptr)
