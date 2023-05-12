@@ -1,0 +1,32 @@
+#include "logviewer.h"
+#include "inc/Logic/cfunctracer.h"
+#include "inc/Logic/ctracer.h"
+
+#include <QApplication>
+#include <QLocale>
+#include <QTranslator>
+#include <cfunctracer.h>
+#include <ctracer.h>
+
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+
+    std::shared_ptr<CTracer> tracer = std::make_shared<CFileTracer>("./", "LogViewer.txt",
+                                                                    TracerLevel::TRACER_DEBUG_LEVEL,
+                                                                    true, true, false, true);
+
+    QTranslator translator;
+    const QStringList uiLanguages = QLocale::system().uiLanguages();
+    for (const QString &locale : uiLanguages) {
+        const QString baseName = "LogViewer_" + QLocale(locale).name();
+        if (translator.load(":/i18n/" + baseName)) {
+            a.installTranslator(&translator);
+            break;
+        }
+    }
+    LogViewer w(tracer);
+    w.show();
+    return a.exec();
+}
