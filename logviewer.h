@@ -129,6 +129,7 @@ private:
     std::shared_ptr<CLogFile> m_currentLogFile;
     std::map<std::string, std::shared_ptr<CLogFile>> m_mpLogFiles;
     std::vector<TracerLevel> m_filteredLevels;
+
     bool m_bWordOnly;
     bool m_bCaseSensitive;
     bool m_bInverseSearch;

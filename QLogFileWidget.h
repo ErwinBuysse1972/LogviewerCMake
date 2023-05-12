@@ -45,6 +45,8 @@ class QLogFileModel : public QAbstractTableModel
 private:
     QList<CLogEntry> m_entries;
     std::shared_ptr<CTracer> m_trace;
+    int pageLength; // Page nr of items that will be viewed in the current window
+    int currentPage;
 public:
     QLogFileModel(std::shared_ptr<CTracer> tracer, QObject* parent = {})
         : QAbstractTableModel{parent}
