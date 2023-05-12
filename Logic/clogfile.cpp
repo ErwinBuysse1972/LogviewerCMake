@@ -401,6 +401,63 @@ std::map<std::string, bool> CLogFile::GetTracelevels(void)
 
     return m_TraceLevels;
 }
+std::map<std::string, bool> CLogFile::GetPIDs(void)
+{
+    CFuncTracer trace("CLogFile::GetPIDs", m_trace);
+    try
+    {
+        if (m_PIDs.size() == 0)
+        {
+            std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
+                if (m_PIDs.find(entry.ProcID()) == m_PIDs.end())
+                    m_PIDs.insert(std::make_pair(entry.ProcID(), true));
+            });
+            // Mark the tracelevels false if they do not occurs in the filter list
+            std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
+                if (m_PIDs.find(entry.ProcID()) == m_PIDs.end())
+                    m_PIDs.insert(std::make_pair(entry.ProcID(), false));
+            });
+        }
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred: %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return m_PIDs;
+}
+std::map<std::string, bool> CLogFile::GetTIDs(void)
+{
+    CFuncTracer trace("CLogFile::GetTIDs", m_trace);
+    try
+    {
+        if (m_TIDs.size() == 0)
+        {
+            std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
+                if (m_TIDs.find(entry.ThreadID()) == m_TIDs.end())
+                    m_TIDs.insert(std::make_pair(entry.ThreadID(), true));
+            });
+            // Mark the tracelevels false if they do not occurs in the filter list
+            std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
+                if (m_TIDs.find(entry.ThreadID()) == m_TIDs.end())
+                    m_TIDs.insert(std::make_pair(entry.ThreadID(), false));
+            });
+        }
+
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred: %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return m_TIDs;
+}
 
 void CLogFile::SetTimeFilter(std::string startTime, std::string endTime)
 {
@@ -530,19 +587,21 @@ void CLogFile::SetLevelFilter()
     }
 
 }
-void CLogFile::SetThreadIdFilter(std::vector<int> ThreadIdFilters)
+void CLogFile::SetThreadIdFilter(void)
 {
     CFuncTracer trace("CLogFile::SetThreadIdFilter", m_trace);
     try
     {
         int prevSize = m_filteredEntries.size();
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                                    return !Contains<int>(ThreadIdFilters, entry.GetThreadId());
-                                }), m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
+                                               m_filteredEntries.end(),
+                                               [=](CLogEntry &entry) {
+                                                   return entry.IsTIDFiltered();
+                                               }),
+                                m_filteredEntries.end());
         trace.Trace("Number of entries removed: %ld, total entries: %ld"
                     , (prevSize - m_filteredEntries.size())
                     , m_filteredEntries.size());
-
     }
     catch(std::exception& ex)
     {
@@ -554,14 +613,21 @@ void CLogFile::SetThreadIdFilter(std::vector<int> ThreadIdFilters)
     }
 
 }
-void CLogFile::SetProcIdFilter(std::vector<int> ProcIdFiters)
+void CLogFile::SetProcIdFilter(void)
 {
     CFuncTracer trace("CLogFile::SetProcIdFilter", m_trace);
     try
     {
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                                    return !Contains<int>(ProcIdFiters, entry.GetProcId());
-        }), m_filteredEntries.end());
+        int prevSize = m_filteredEntries.size();
+        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
+                                               m_filteredEntries.end(),
+                                               [=](CLogEntry &entry) {
+                                                   return entry.IsPIDFiltered();
+                                               }),
+                                m_filteredEntries.end());
+        trace.Trace("Number of entries removed: %ld, total entries: %ld"
+                    , (prevSize - m_filteredEntries.size())
+                    , m_filteredEntries.size());
     }
     catch(std::exception& ex)
     {
@@ -799,8 +865,75 @@ void CLogFile::UpdateLevel(bool bFiltered, const std::string& sLevel)
     {
         trace.Error("Exception occurred");
     }
-
 }
+void CLogFile::UpdatePID(bool bFiltered, const std::string& sPid)
+{
+    CFuncTracer trace("CLogFile::UpdatePID", m_trace);
+    int iCount = 0;
+    try
+    {
+        trace.Trace("PID : %s, bFiltered : %s", sPid.c_str(), (bFiltered == true)?"TRUE" : "FALSE");
+        if (m_PIDs.size() == 0)
+            GetPIDs();
+
+        if (m_PIDs.find(sPid) != m_PIDs.end())
+            m_PIDs[sPid] = (bFiltered == false);
+
+        // Update the filtered entries (IsLevelFiltered)
+        std::for_each(m_logEntries.begin(),
+                      m_logEntries.end(),
+                      [=, &bFiltered, &sPid, &iCount](CLogEntry& entry) {
+                          if (entry.ProcID().find(sPid) != std::string::npos) {
+                              entry.FilterPID(bFiltered);
+                              iCount++;
+                          }
+                      });
+        trace.Trace("iCount : %ld", iCount);
+
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+void CLogFile::UpdateTID(bool bFiltered, const std::string& sTid)
+{
+    CFuncTracer trace("CLogFile::UpdateTID", m_trace);
+    int iCount = 0;
+    try
+    {
+        trace.Trace("TID : %s, bFiltered : %s", sTid.c_str(), (bFiltered == true)?"TRUE" : "FALSE");
+        if (m_TIDs.size() == 0)
+            GetTIDs();
+
+        if (m_TIDs.find(sTid) != m_TIDs.end())
+            m_TIDs[sTid] = (bFiltered == false);
+
+        // Update the filtered entries (IsLevelFiltered)
+        std::for_each(m_logEntries.begin(),
+                      m_logEntries.end(),
+                      [=, &bFiltered, &sTid, &iCount](CLogEntry& entry) {
+                          if (entry.ThreadID().find(sTid) != std::string::npos) {
+                              entry.FilterTID(bFiltered);
+                              iCount++;
+                          }
+                      });
+        trace.Trace("iCount : %ld", iCount);
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+
 bool CLogFile::Save(const char *filename)
 {
     CFuncTracer trace("CLogFile::Save", m_trace);

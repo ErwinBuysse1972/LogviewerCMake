@@ -1,6 +1,7 @@
 #include <ctracer.h>
 #include <cstring>
 #include <algorithm>
+#include <processthreadsapi.h>
 
 using namespace std;
 
@@ -65,6 +66,8 @@ string CTracer::GetCurrentPIDInfo()
     pid_t pid = syscall(__NR_getpid);
     pid_t lpid = getpid();
 #else
+    pid = GetCurrentProcessId();
+    tid = GetCurrentThreadId();
 #endif
     ss <<"[" <<  std::to_string(pid) << ":"<< std::to_string(tid) << "] ";
     return ss.str();

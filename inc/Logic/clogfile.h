@@ -42,6 +42,8 @@ public:
         , m_bFunctionFiltered(false)
         , m_bClassFiltered(false)
         , m_bLevelFiltered(false)
+        , m_bPIDFiltered(false)
+        , m_bTIDFiltered(false)
     {
         CFuncTracer trace("CLogEntry::CLogEntry", m_trace, false);
         m_ThdId = std::atoi(m_threadId.c_str());
@@ -97,6 +99,8 @@ public:
     void FilterFunction(bool bFiltered){ m_bFunctionFiltered = bFiltered;}
     void FilterClass(bool bFiltered){ m_bClassFiltered = bFiltered;}
     void FilterLevel(bool bFiltered){ m_bLevelFiltered = bFiltered;}
+    void FilterPID(bool bFiltered){ m_bPIDFiltered = bFiltered;}
+    void FilterTID(bool bFiltered){ m_bTIDFiltered = bFiltered;}
 
     TracerLevel GetLevel(void){ return m_tracerLevel;}
     int GetProcId(void) const { return m_ProcId;}
@@ -122,6 +126,8 @@ public:
     bool IsClassFiltered(void) const { return m_bClassFiltered; }
     bool IsFunctionFiltered(void) const{ return m_bFunctionFiltered;}
     bool IsLevelFiltered(void) const{ return m_bLevelFiltered;}
+    bool IsPIDFiltered(void) const { return m_bPIDFiltered;}
+    bool IsTIDFiltered(void) const { return m_bTIDFiltered;}
 
     std::string GetRequiredText(void) const{ return m_ReqText; }
 
@@ -151,6 +157,8 @@ private:
     bool m_bFunctionFiltered;
     bool m_bClassFiltered;
     bool m_bLevelFiltered;
+    bool m_bPIDFiltered;
+    bool m_bTIDFiltered;
     int m_ThdId;
     int m_ProcId;
     unsigned long long m_uiTime;
@@ -176,13 +184,15 @@ public:
     std::map<std::string, bool> GetFunctions(void);
     std::map<std::string, bool> GetClasses(void);
     std::map<std::string, bool> GetTracelevels(void);
+    std::map<std::string, bool> GetPIDs(void);
+    std::map<std::string, bool> GetTIDs(void);
 
     void SetTimeFilter(std::string startTime, std::string endTime);
     void SetDescriptionFilter(std::vector<std::string> TextFilters, bool caseSensitive = true, bool wordOnly = false);
     void SetInverseDescriptionFilter(std::vector<std::string> TextFilter, bool caseSensitive = true, bool WordOnly = false);
     void SetLevelFilter(void);
-    void SetThreadIdFilter(std::vector<int> ThreadIdFilters);
-    void SetProcIdFilter(std::vector<int> ProcIdFiters);
+    void SetThreadIdFilter(void);
+    void SetProcIdFilter(void);
     void SetClassNameFilter(void);
     void SetFunctionFilter(void);
     void ClearFilter(void);
@@ -201,6 +211,8 @@ public:
     void UpdateClassFunctions(bool bFiltered, const std::string& classname);
     void UpdateFunctionName(bool bFiltered, const std::string& fullFunctionName);
     void UpdateLevel(bool bFiltered, const std::string& sLevel);
+    void UpdatePID(bool bFiltered, const std::string& sPid);
+    void UpdateTID(bool bFiltered, const std::string& sTid);
     bool Save(const char *filename);
 
     bool IsTimeAvailable(void){ return (m_TimeIdx >= 0);}
@@ -248,6 +260,8 @@ private:
     std::map<std::string, bool> m_Functions;
     std::map<std::string, bool> m_Classes;
     std::map<std::string, bool> m_TraceLevels;
+    std::map<std::string, bool> m_PIDs;
+    std::map<std::string, bool> m_TIDs;
 
     void parse(void);
     void parse_MP(void);
