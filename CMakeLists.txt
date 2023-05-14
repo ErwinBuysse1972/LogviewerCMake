@@ -21,6 +21,7 @@ set(PROJECT_SOURCES
     Logic/ctracer.cpp
     Logic/cscopedtimer.cpp
     Logic/cconfigsettings.cpp
+    Logic/clogentry.cpp
     logviewer.cpp
     logviewer.h
     inc/Logic/clogfile.h
@@ -29,8 +30,11 @@ set(PROJECT_SOURCES
     inc/Logic/cfunctracer.h
     inc/Logic/cscopedtimer.h
     inc/Logic/ctracer.h
+    inc/Logic/IDataObject.h
+    inc/Logic/clogentry.h
     main.cpp
     QCheckableComboBox.h
+    QLogFileWidget.cpp
     QLogFileWidget.h
     searchform.cpp
     searchform.h
@@ -39,6 +43,14 @@ set(PROJECT_SOURCES
     logentryview.cpp
     logentryview.h
     logentryview.ui
+    qfilelogfilemodel.cpp
+    qfilelogfilemodel.h
+    qcashfilemodel.cpp
+    qcashfilemodel.h
+    qfiletableview.cpp
+    qfiletableview.h
+    richtextdelegate.cpp
+    richtextdelegate.h
 )
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(Test

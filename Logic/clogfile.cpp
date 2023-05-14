@@ -167,95 +167,6 @@ CLogFile::CLogFile(const CLogFile &&file)
     }
 
 }
-CLogFile& CLogFile::operator=(CLogFile& file)
-{
-    CFuncTracer trace("CLogFile::operator=(&)", file.m_trace);
-    try
-    {
-        if (&file != this)
-        {
-            m_name = file.m_name;
-            m_sLine = file.m_sLine;
-            m_sTime = file.m_sTime;
-            m_sLevel = file.m_sLevel;
-            m_sProcId = file.m_sProcId;
-            m_sThreadId = file.m_sThreadId;
-            m_sClassname = file.m_sClassname;
-            m_sFuncName = file.m_sFuncName;
-            m_sDescription = file.m_sDescription;
-            m_TimeIdx = file.m_TimeIdx;
-            m_LevelIdx = file.m_LevelIdx;
-            m_ProdIdIdx = file.m_ProdIdIdx;
-            m_ThreadIdIdx = file.m_ThreadIdIdx;
-            m_ClassNameIdx = file.m_ClassNameIdx;
-            m_FuncIdx = file.m_FuncIdx;
-            m_DescIdx = file.m_DescIdx;
-            m_maxDescLength = file.m_maxDescLength;
-            m_maxClassLength = file.m_maxClassLength;
-            m_maxFuncLength = file.m_maxFuncLength;
-            m_logEntries = file.m_logEntries;
-            m_filteredEntries = file.m_filteredEntries;
-            m_ClassOccurences.insert(file.m_ClassOccurences.begin(), file.m_ClassOccurences.end());
-            m_FunctionOccurences.insert(file.m_FunctionOccurences.begin(), file.m_FunctionOccurences.end());
-            m_FunctionEntries.insert(file.m_FunctionEntries.begin(), file.m_FunctionEntries.end());
-            m_FunctionExits.insert(file.m_FunctionExits.begin(), file.m_FunctionExits.end());
-        }
-    }
-    catch(std::exception& ex)
-    {
-        trace.Error("Exception occurred : %s", ex.what());
-    }
-    catch(...)
-    {
-        trace.Error("Exception occurred");
-    }
-    return *this;
-}
-CLogFile& CLogFile::operator=(CLogFile&& file)
-{
-    CFuncTracer trace("CLogFile::operator=(&&)", file.m_trace);
-    try
-    {
-        if (&file != this)
-        {
-            m_name = std::move(file.m_name);
-            m_sLine = std::move(file.m_sLine);
-            m_sTime = std::move(file.m_sTime);
-            m_sLevel = std::move(file.m_sLevel);
-            m_sProcId = std::move(file.m_sProcId);
-            m_sThreadId = std::move(file.m_sThreadId);
-            m_sClassname = std::move(file.m_sClassname);
-            m_sFuncName = std::move(file.m_sFuncName);
-            m_sDescription = std::move(file.m_sDescription);
-            m_TimeIdx = std::move(file.m_TimeIdx);
-            m_LevelIdx = std::move(file.m_LevelIdx);
-            m_ProdIdIdx = std::move(file.m_ProdIdIdx);
-            m_ThreadIdIdx = std::move(file.m_ThreadIdIdx);
-            m_ClassNameIdx = std::move(file.m_ClassNameIdx);
-            m_FuncIdx = std::move(file.m_FuncIdx);
-            m_DescIdx = std::move(file.m_DescIdx);
-            m_maxDescLength = std::move(file.m_maxDescLength);
-            m_maxClassLength = std::move(file.m_maxClassLength);
-            m_maxFuncLength = std::move(file.m_maxFuncLength);
-            m_logEntries = std::move(file.m_logEntries);
-            m_filteredEntries = std::move(file.m_filteredEntries);
-            m_ClassOccurences.insert(file.m_ClassOccurences.begin(), file.m_ClassOccurences.end());
-            m_FunctionOccurences.insert(file.m_FunctionOccurences.begin(), file.m_FunctionOccurences.end());
-            m_FunctionEntries.insert(file.m_FunctionEntries.begin(), file.m_FunctionEntries.end());
-            m_FunctionExits.insert(file.m_FunctionExits.begin(), file.m_FunctionExits.end());
-        }
-    }
-    catch(std::exception& ex)
-    {
-        trace.Error("Exception occurred : %s", ex.what());
-    }
-    catch(...)
-    {
-        trace.Error("Exception occurred");
-    }
-    return *this;
-}
-
 CLogFile::~CLogFile()
 {
     CFuncTracer trace("CLogFile::~CLogFile", m_trace);
@@ -272,23 +183,10 @@ CLogFile::~CLogFile()
         trace.Error("Exception occurred");
     }
 }
-std::vector<CLogEntry> CLogFile::GetEntries(void)
+std::vector<CLogEntry>& CLogFile::GetEntries(void)
 {
     CFuncTracer trace("CLogFile::GetEntries", m_trace);
-    try
-    {
-        return m_filteredEntries;
-    }
-    catch(std::exception& ex)
-    {
-        trace.Error("Exception occurred : %s", ex.what());
-    }
-    catch(...)
-    {
-        trace.Error("Exception occurred");
-    }
-
-    return std::vector<CLogEntry>();
+    return m_filteredEntries;
 }
 std::map<std::string, bool> CLogFile::GetFunctions(void)
 {
@@ -474,7 +372,9 @@ void CLogFile::SetTimeFilter(std::string startTime, std::string endTime)
 
         int prevSize = m_filteredEntries.size();
 
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(), [=, &uiStartTime, &uiEndTime](CLogEntry& entry){
+        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
+                                               m_filteredEntries.end(),
+                                               [=, &uiStartTime, &uiEndTime](CLogEntry& entry){
                                     return (  (entry.GetTime() < uiStartTime)
                                             ||(entry.GetTime() > uiEndTime));
                                }), m_filteredEntries.end());
