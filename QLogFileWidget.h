@@ -35,7 +35,7 @@ class QLogFileWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit QLogFileWidget(std::shared_ptr<CTracer> tracer, std::vector<CLogEntry> entries, __attribute__((unused))QWidget *parent = nullptr);
+    explicit QLogFileWidget(std::shared_ptr<CTracer> tracer, std::vector<IData *> entries, __attribute__((unused))QWidget *parent = nullptr);
     ~QLogFileWidget();
     QLogFileModel *GetModel(void);
     QCashFileModel *GetCashModel(void);
@@ -58,7 +58,7 @@ public:
     void RegisterDropDown_DisableTraceLevel(std::function<void (const std::string&)> event){ m_notDisableTraceLevel = event; }
 
 signals:
-    void RowDoubleClicked(const CLogEntry& index);
+    void RowDoubleClicked(const CLogEntry* index);
 
 private slots:
     void row_double_click(const QModelIndex &  index);
@@ -80,6 +80,7 @@ private slots:
     QHBoxLayout *m_Layout;
     RichTextDelegate *m_delegate;
     QLogfileTableView *m_View;
+    CLogEntryContainer *m_container;
     QCashFileModel  *m_cashModel;
     QLogFileModel *m_Model;
     std::shared_ptr<CTracer> m_trace;
@@ -102,5 +103,5 @@ private slots:
     std::function<void (const std::string&)>    m_notDisableTraceLevel;
 
     void init_createActions(void);
-    void init_createForm(std::vector<CLogEntry> entries);
+    void init_createForm(std::vector<IData*> entries);
 };

@@ -1,13 +1,15 @@
 #include "QLogFileWidget.h"
 #include "cfunctracer.h"
+#include "cscopedtimer.h"
 
-QLogFileWidget::QLogFileWidget(std::shared_ptr<CTracer> tracer, std::vector<CLogEntry> entries, QWidget *parent)
+QLogFileWidget::QLogFileWidget(std::shared_ptr<CTracer> tracer, std::vector<IData *> entries, QWidget *parent)
     : QWidget(parent)
     , m_tabindex(-1)
     , m_Layout(nullptr)
     , m_delegate(nullptr)
     , m_View(nullptr)
     , m_Model(nullptr)
+    , m_container(nullptr)
     , m_cashModel(nullptr)
     , m_trace(tracer)
     , actNotifyStartDateTime(nullptr)
@@ -75,6 +77,11 @@ QLogFileWidget::~QLogFileWidget()
             delete m_cashModel;
             m_cashModel = nullptr;
         }
+        if (m_container)
+        {
+            delete m_container;
+            m_container = nullptr;
+        }
     }
     catch(std::exception& ex)
     {
@@ -126,7 +133,15 @@ QModelIndex QLogFileWidget::GetCurrentIndex(void)
 long long QLogFileWidget::ToggleMark(QModelIndex index, bool& bMark)
 {
     CFuncTracer trace("QLogFileWidget::ToggleMark", m_trace);
-    return m_Model->rowToggleMark(index, bMark);
+    if (m_Model != nullptr)
+    {
+        return m_Model->rowToggleMark(index, bMark);
+    }
+    else if (m_cashModel != nullptr)
+    {
+        return m_cashModel->rowToggleMark(index, bMark);
+    }
+    return -1;
 }
 void QLogFileWidget::GotoToNextMark(void)
 {
@@ -135,18 +150,30 @@ void QLogFileWidget::GotoToNextMark(void)
     {
         // Find next mark
         QModelIndex index = m_View->currentIndex();
-        int row = m_Model->rowGetNextToggleMark(index);
-        if (row >= 0)
+        if (m_Model != nullptr)
         {
-            QModelIndex nextMark = m_Model->CreateIndex(row, 0);
-            m_View->setCurrentIndex(nextMark);
+            int row = m_Model->rowGetNextToggleMark(index);
+            if (row >= 0)
+            {
+                QModelIndex nextMark = m_Model->CreateIndex(row, 0);
+                m_View->setCurrentIndex(nextMark);
+                return;
+            }
         }
-        else
+        else if (m_cashModel != nullptr)
         {
-            QMessageBox::warning(this, "WARNING - No Marks", "No next marks were found",
-                                 QMessageBox::StandardButton::Ok, QMessageBox::StandardButton::NoButton);
-            trace.Error("No next Mark found!");
+            int row = m_cashModel->rowGetNextToggleMark(index);
+            if (row >= 0)
+            {
+                QModelIndex nextMark = m_cashModel->CreateIndex(row, 0);
+
+                m_View->setCurrentIndex(nextMark);
+                return;
+            }
         }
+        QMessageBox::warning(this, "WARNING - No Marks", "No next marks were found",
+                             QMessageBox::StandardButton::Ok, QMessageBox::StandardButton::NoButton);
+        trace.Error("No next Mark found!");
     }
     catch(std::exception& ex)
     {
@@ -189,8 +216,17 @@ void QLogFileWidget::GotoTopOfTable(void)
     CFuncTracer trace("QLogFileWidget::GotoTopOfTable", m_trace);
     try
     {
-        QModelIndex top = m_Model->CreateIndex(0,0);
-        m_View->setCurrentIndex(top);
+        QModelIndex top;
+        if (m_Model != nullptr)
+        {
+            top = m_Model->CreateIndex(0,0);
+            m_View->setCurrentIndex(top);
+        }
+        else if (m_cashModel != nullptr)
+        {
+            top = m_cashModel->CreateIndex(0,0);
+            m_View->setCurrentIndex(top);
+        }
     }
     catch(std::exception& ex)
     {
@@ -207,10 +243,11 @@ void QLogFileWidget::row_double_click(const QModelIndex &  index)
     try
     {
         trace.Trace("index : %ld", index);
-        std::optional<CLogEntry> entry = GetModel()->getLogEntry(index.row());
-        if (entry)
+        IData *entry = GetModel()->getLogEntry(index.row());
+        if (entry != nullptr)
         {
-            emit RowDoubleClicked(*entry);
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+            emit RowDoubleClicked(lpEntry);
         }
     }
     catch(std::exception& ex)
@@ -242,10 +279,16 @@ void QLogFileWidget::notifyStartDateTime(void)
     CFuncTracer trace("QLogFileWidget::", m_trace, false);
     if (m_notStartTime != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if (m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if (m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+
+        if (entry != nullptr)
         {
-            std::string time = entry->Time();
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(&entry);
+            std::string time = lpEntry->Time();
             trace.Trace("time : %s", time.c_str());
             m_notStartTime(time);
         }
@@ -260,12 +303,21 @@ void QLogFileWidget::notifyStopDateTime(void)
     CFuncTracer trace("QLogFileWidget::", m_trace, false);
     if (m_notStopTime != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if (m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if (m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+
+        if (entry != nullptr)
         {
-            std::string time = entry->Time();
-            trace.Trace("time : %s", time.c_str());
-            m_notStopTime(time);
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(entry);
+            if (lpEntry != nullptr)
+            {
+                std::string time = lpEntry->Time();
+                trace.Trace("time : %s", time.c_str());
+                m_notStopTime(time);
+            }
         }
         else
             trace.Error("entry on %ld row does not exist", m_notIndex.row());
@@ -278,12 +330,20 @@ void QLogFileWidget::notifyProcessId(void)
     CFuncTracer trace("QLogFileWidget::", m_trace, false);
     if (m_notProcId != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if (m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if (m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+        if (entry != nullptr)
         {
-            std::string id = entry->ProcID();
-            trace.Trace("id : %s", id.c_str());
-            m_notProcId(id);
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(entry);
+            if (lpEntry != nullptr)
+            {
+                std::string id = lpEntry->ProcID();
+                trace.Trace("id : %s", id.c_str());
+                m_notProcId(id);
+            }
         }
         else
             trace.Error("entry on %ld row does not exist", m_notIndex.row());
@@ -296,12 +356,20 @@ void QLogFileWidget::notifyThreadID(void)
     CFuncTracer trace("QLogFileWidget::", m_trace, false);
     if (m_notThreadId != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if( m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if ( m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+        if (entry != nullptr)
         {
-            std::string id = entry->ThreadID();
-            trace.Trace("id : %s", id.c_str());
-            m_notThreadId(id);
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(entry);
+            if (lpEntry != nullptr)
+            {
+                std::string id = lpEntry->ThreadID();
+                trace.Trace("id : %s", id.c_str());
+                m_notThreadId(id);
+            }
         }
         else
             trace.Error("entry on %ld row does not exist", m_notIndex.row());
@@ -325,12 +393,20 @@ void QLogFileWidget::disableClass(void)
     CFuncTracer trace("QLogFileWidget::", m_trace, false);
     if (m_notDisableClass != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if (m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if (m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+        if (entry != nullptr)
         {
-            std::string cls = entry->Class();
-            trace.Trace("Class : %s", cls.c_str());
-            m_notDisableClass(cls);
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(entry);
+            if (lpEntry != nullptr)
+            {
+                std::string cls = lpEntry->Class();
+                trace.Trace("Class : %s", cls.c_str());
+                m_notDisableClass(cls);
+            }
         }
         else
             trace.Error("entry on %ld row does not exist", m_notIndex.row());
@@ -343,12 +419,20 @@ void QLogFileWidget::disablefunction(void)
     CFuncTracer trace("QLogFileWidget::", m_trace, false);
     if (m_notDisableFunc != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if (m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if (m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+        if (entry != nullptr)
         {
-            std::string funcName = entry->FuncName();
-            trace.Trace("funcname : %s", funcName.c_str());
-            m_notDisableClass(entry->FuncName());
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(entry);
+            if (lpEntry != nullptr)
+            {
+                std::string funcName = lpEntry->FuncName();
+                trace.Trace("funcname : %s", funcName.c_str());
+                m_notDisableClass(lpEntry->FuncName());
+            }
         }
         else
             trace.Error("entry on %ld row does not exist", m_notIndex.row());
@@ -361,12 +445,21 @@ void QLogFileWidget::disableTraceLevel(void)
     CFuncTracer trace("QLogFileWidget::disableTraceLevel", m_trace, false);
     if (m_notDisableTraceLevel != nullptr)
     {
-        std::optional<CLogEntry> entry = m_Model->getLogEntry(m_notIndex.row());
-        if (entry)
+        IData* entry;
+        if (m_Model != nullptr)
+            entry = m_Model->getLogEntry(m_notIndex.row());
+        if (m_cashModel != nullptr)
+            entry = m_cashModel->getLogEntry(m_notIndex.row());
+
+        if (entry != nullptr)
         {
-            std::string level = entry->Level();
-            trace.Trace("level : %s", level.c_str());
-            m_notDisableTraceLevel(level);
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(entry);
+            if (lpEntry != nullptr)
+            {
+                std::string level = lpEntry->Level();
+                trace.Trace("level : %s", level.c_str());
+                m_notDisableTraceLevel(level);
+            }
         }
         else
             trace.Error("entry on %ld row does not exist", m_notIndex.row());
@@ -394,9 +487,15 @@ void QLogFileWidget::init_createActions(void)
     actNotifyDisableTraceLevel = new QAction(tr("Filter tracelevel"), this);
     connect(actNotifyDisableTraceLevel, &QAction::triggered, this, &QLogFileWidget::disableTraceLevel);
 }
-void QLogFileWidget::init_createForm(std::vector<CLogEntry> entries)
+void QLogFileWidget::init_createForm(std::vector<IData *> entries)
 {
     CFuncTracer trace("QLogFileWidget::init_createForm", m_trace);
+    CScopeTimer timer("QLogFileWidget::init_createForm", 0, [=, &trace](const std::string& msg)
+                      {
+                          trace.Info("Timings : ");
+                          trace.Info("   %s", msg.c_str());
+                      });
+
     try
     {
         m_delegate = new RichTextDelegate(m_trace, this);
@@ -422,19 +521,34 @@ void QLogFileWidget::init_createForm(std::vector<CLogEntry> entries)
                 menu.addAction(actNotifyDisableClass);
             menu.exec(pos);
         });
-        m_Model = new QLogFileModel(m_trace, this);
+
+//        m_Model = new QLogFileModel(m_trace, this);
+
+        m_container = new CLogEntryContainer(m_trace);
+        m_cashModel = new QCashFileModel(m_trace,
+                                         m_container,
+                                         this);
         m_Layout = new QHBoxLayout(this);
 
 
-        m_Model->append(entries);
-        m_View->setModel(m_Model);
+        if (m_Model != nullptr)
+        {
+            if (entries.size() > 0)
+                m_Model->append(entries);
+            m_View->setModel(m_Model);
+        }
+        else if (m_cashModel != nullptr)
+        {
+            if (entries.size() > 0)
+                m_cashModel->append(entries);
+            m_View->setModel(m_cashModel);
+        }
+
         m_View->setItemDelegate(m_delegate);
-        m_View->resizeColumnsToContents();
         m_View->setStyleSheet("QTableView:disabled{color:grey;}QTableView:enabled{color:black;font-weight:normal;}");
         m_View->setAlternatingRowColors(true);
         m_View->setSelectionBehavior(QAbstractItemView::SelectionBehavior::SelectRows);
-
-
+        m_View->horizontalHeader()->setStretchLastSection(true);
         m_Layout->setContentsMargins(0,0,0,0);
         m_Layout->addWidget(m_View);
     }

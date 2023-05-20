@@ -6,13 +6,14 @@
 #include <cconfigsettings.h>
 #include <cfunctracer.h>
 #include <ctracer.h>
+#include <functional>
+#include <QRunnable>
 #include "clogentry.h"
-
 
 class CLogFile
 {
 public:
-    CLogFile(const char* file, std::shared_ptr<CTracer> tracer);
+    CLogFile(const char* file, std::shared_ptr<CTracer> tracer, bool bParse = true);
     CLogFile(const CLogFile& file);
     CLogFile(const CLogFile&& file);
     virtual ~CLogFile();
@@ -20,7 +21,7 @@ public:
     CLogFile& operator=(CLogFile& file);
     CLogFile& operator=(CLogFile&& file);
 
-    std::vector<CLogEntry>& GetEntries(void);
+    std::vector<IData *> GetEntries(void);
     std::map<std::string, bool> GetFunctions(void);
     std::map<std::string, bool> GetClasses(void);
     std::map<std::string, bool> GetTracelevels(void);
@@ -64,14 +65,19 @@ public:
     bool IsDescriptionAvailable(void){ return (m_DescIdx >= 0);}
     int GetNumberLines(void){ return m_logEntries.size();}
     int GetNumberFilteredLines(void){ return m_filteredEntries.size();}
+    void parse(void);
+    void parse_MP(void);
     std::string Name(void) const{ return m_name;}
+    void RegisterParsedData(std::function<void (std::vector<IData*> items)> event);
 
 private:
+    int m_parsedItemsBuffer;
     std::shared_ptr<CTracer> m_trace;
     std::string m_name;
     std::string m_saveFileName;
-    std::vector<CLogEntry> m_logEntries;
-    std::vector<CLogEntry> m_filteredEntries;
+    std::recursive_mutex m_mutex;
+    std::vector<IData *> m_logEntries;
+    std::vector<IData *> m_filteredEntries;
     std::string m_sLine;
     std::string m_sTime = "";
     std::string m_sLevel = "";
@@ -88,6 +94,7 @@ private:
     int m_ClassNameIdx;
     int m_FuncIdx;
     int m_DescIdx;
+    int m_CurrentParsedDataIndex;
     unsigned long m_maxDescLength;
     unsigned long m_maxClassLength;
     unsigned long m_maxFuncLength;
@@ -102,9 +109,9 @@ private:
     std::map<std::string, bool> m_TraceLevels;
     std::map<std::string, bool> m_PIDs;
     std::map<std::string, bool> m_TIDs;
+    std::function<void (std::vector<IData*> items)> m_onParsedData;
 
-    void parse(void);
-    void parse_MP(void);
+
     void automaticDetectionFormat_MP(QStringList fields);
     void automaticDetectFormat(std::vector<std::string>& fields);
     bool isTraceLevelValid(const char *level);
@@ -116,4 +123,24 @@ private:
     void UpdateConfigSettings(void);
     int getNrOfLines(const std::string& file);
     int getFileSize(FILE* fp);
+};
+
+class ParseFileTask : public QObject, public QRunnable
+{
+    Q_OBJECT
+public:
+    ParseFileTask(std::shared_ptr<CTracer> tracer, std::string filename, int trunkDataSize, QObject* parent=nullptr);
+    ~ParseFileTask() = default;
+
+    std::shared_ptr<CLogFile> GetFile(void) const { return m_file;}
+    void RegisterOnParsedData(std::function<void(std::vector<IData*> items)> event){ m_onParsedData = event;}
+    void RegisterOnParsedFinished(std::function<void(int items)> event){m_onParsedFinished = event;}
+protected:
+    void run();
+private:
+    int                         m_itemsParsed;
+    std::shared_ptr<CTracer>    m_trace;
+    std::shared_ptr<CLogFile>   m_file;
+    std::function<void(std::vector<IData*> items)> m_onParsedData;
+    std::function<void(int items)> m_onParsedFinished;
 };

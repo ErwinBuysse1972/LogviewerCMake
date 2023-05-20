@@ -46,6 +46,8 @@ private slots:
     void onClearFilter_clicked(void);
     void onClearLevelFilter_clicked(void);
     void onClearFunctionFilter_clicked(void);
+    void onParsedData(std::vector<IData*> items);
+    void onParsedDataFinished(int items);
 
     void onTabChanged(int index);
     void on_toggle_mark(void);

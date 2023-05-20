@@ -49,7 +49,7 @@ int QLogFileModel::columnCount(const QModelIndex &) const
 QVariant QLogFileModel::data(const QModelIndex &index, int role) const
 {
     CFuncTracer trace("QLogFileModel::data", m_trace, false);
-    const CLogEntry& entry = m_entries[index.row()];
+    const IData* entry = m_entries.at(index.row());
     trace.Trace("col:%ld, row:%ld, role:%s"
                 , index.column()
                 , index.row()
@@ -77,49 +77,12 @@ QVariant QLogFileModel::data(const QModelIndex &index, int role) const
                     "Unknown");
     if (  (role == Qt::DisplayRole)
         ||(role == Qt::EditRole))
-    {
-        switch(index.column())
-        {
-        case (int)eColumns::eDateTime:
-            return QString::fromStdString(entry.Time());
-        case (int)eColumns::eTraceLevel:
-            return QString::fromStdString(entry.Level());
-        case (int)eColumns::eProc:
-            return QString::fromStdString(std::to_string(entry.GetProcId()));
-        case (int)eColumns::eThread:
-            return QString::fromStdString(std::to_string(entry.GetThreadId()));
-        case (int)eColumns::eClass:
-            return QString::fromStdString(entry.Class());
-        case (int)eColumns::eFunction:
-            return QString::fromStdString(entry.FuncName());
-        case (int)eColumns::eDescription:
-            return QString::fromStdString(entry.Description());
-        default: return {};
-        }
-    }
+        return entry->GetDataElement(index.column());
 
     if (role == Qt::BackgroundRole)
-    {
-        QColor backcolor;
-        backcolor.setRgb(255,255,255);
-        if (entry.IsMarked())
-            backcolor.setRgb(212,235,242);
+        return entry->GetBackGroundColor(index.column());
 
-        QBrush background(backcolor);
-        return background;
-    }
-
-    if (role == Qt::UserRole)
-    {
-        if (index.row() < m_entries.count())
-        {
-            return QVariant::fromValue<CLogEntry>(m_entries[index.row()]);
-        }
-        else
-            return {};
-    }
-
-    return {};
+    return QVariant();
 }
 QVariant QLogFileModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
@@ -180,7 +143,7 @@ QVariant QLogFileModel::headerData(int section, Qt::Orientation orientation, int
     }
     return {};
 }
-void QLogFileModel::append(std::vector<CLogEntry> entries)
+void QLogFileModel::append(std::vector<IData *> entries)
 {
     CFuncTracer trace("QLogFileModel::append", m_trace);
     CScopeTimer timer("QLogFileModel::append", 0, [=, &trace](const std::string& msg){
@@ -191,7 +154,7 @@ void QLogFileModel::append(std::vector<CLogEntry> entries)
     {
         timer.SetTime("01");
         beginInsertRows({}, m_entries.count(), m_entries.count() + entries.size());
-        for(const CLogEntry& entry : entries)
+        for(IData* entry : entries)
         {
             timer.SetTime("02");
             m_entries.append(entry);
@@ -239,22 +202,26 @@ long long QLogFileModel::rowToggleMark(const QModelIndex& index, bool& bMark)
             return id;
         }
 
-        id = m_entries[index.row()].GetID();
-        if (m_entries[index.row()].IsMarked())
+        CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(&m_entries[index.row()]);
+
+        if (lpEntry != nullptr)
         {
-            m_entries[index.row()].SetMark( false );
-            bMark = false;
+            if (lpEntry->IsMarked())
+            {
+                lpEntry->SetMark( false );
+                bMark = false;
+            }
+            else
+            {
+                lpEntry->SetMark( true );
+                bMark = true;
+            }
+            trace.Trace("row %ld is changed (%lld)", index.row(), id);
+            QModelIndex first = createIndex((index.row() >  1)?(index.row() - 1) : 0, 0);
+            QModelIndex last = createIndex(((index.row() + 2) < m_entries.size())?(index.row() + 1) : index.row(), (int)eColumns::eNumOfColumns);
+            trace.Trace("Send signal that the row is changed (first:%ld, %ld  last:%ld, %ld", first.row(), first.column(), last.row(), last.column());
+            emit dataChanged(first, last);
         }
-        else
-        {
-            m_entries[index.row()].SetMark( true );
-            bMark = true;
-        }
-        trace.Trace("row %ld is changed (%lld)", index.row(), id);
-        QModelIndex first = createIndex((index.row() >  1)?(index.row() - 1) : 0, 0);
-        QModelIndex last = createIndex(((index.row() + 2) < m_entries.size())?(index.row() + 1) : index.row(), (int)eColumns::eNumOfColumns);
-        trace.Trace("Send signal that the row is changed (first:%ld, %ld  last:%ld, %ld", first.row(), first.column(), last.row(), last.column());
-        emit dataChanged(first, last);
     }
     catch(std::exception& ex)
     {
@@ -266,7 +233,7 @@ long long QLogFileModel::rowToggleMark(const QModelIndex& index, bool& bMark)
     }
     return id;
 }
-std::optional<CLogEntry> QLogFileModel::getLogEntry(int index) const
+IData * QLogFileModel::getLogEntry(int index) const
 {
     CFuncTracer trace("QLogFileModel::getLogEntry", m_trace);
     try
@@ -275,7 +242,7 @@ std::optional<CLogEntry> QLogFileModel::getLogEntry(int index) const
         if (index >= m_entries.size())
         {
             trace.Error("Row does not exist inside the model! (index : %ld)", index);
-            return std::nullopt;
+            return nullptr;
         }
         return m_entries[index];
     }
@@ -287,7 +254,7 @@ std::optional<CLogEntry> QLogFileModel::getLogEntry(int index) const
     {
         trace.Error("Exception occurred");
     }
-    return std::nullopt;
+    return nullptr;
 }
 int QLogFileModel::rowGetNextToggleMark(QModelIndex& currentIdx)
 {
@@ -299,14 +266,26 @@ int QLogFileModel::rowGetNextToggleMark(QModelIndex& currentIdx)
             // From current position to the end of the file
             for (int idx = currentIdx.row() + 1; idx < m_entries.size(); idx++)
             {
-                if (m_entries[idx].IsMarked() == true)
-                    return idx;
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(&m_entries[idx]);
+                if (lpEntry != nullptr)
+                {
+                    if (lpEntry->IsMarked() == true)
+                        return idx;
+                }
+                else
+                    trace.Error("IData is not of CLogEntry type");
             }
             // From the beginning of the file until the current position
             for (int idx = 0; idx < currentIdx.row(); idx++)
             {
-                if (m_entries[idx].IsMarked() == true)
-                    return idx;
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(&m_entries[idx]);
+                if (lpEntry != nullptr)
+                {
+                    if (lpEntry->IsMarked() == true)
+                        return idx;
+                }
+                else
+                    trace.Error("IData is not of CLogEntry type");
             }
             trace.Error("No next mark found!");
         }
@@ -333,27 +312,33 @@ std::list<long long> QLogFileModel::IndicateSearchText(const std::string& text)
     try
     {
         trace.Trace("Text : %s", text.c_str());
-        std::for_each(m_entries.begin(), m_entries.end(), [=, &trace, &text, &iCount, &iRow, &ids, &rowsChanged](CLogEntry& entry){
-            if (entry.Description().find(text) != std::string::npos)
-            {
-                if (entry.IsMarked() == false)
-                {
-                    entry.SetSearchMark(true, text);
-                    ids.push_back(entry.GetID());
-                    rowsChanged.push_back(iRow);
-                    iCount++;
-                }
-            }
-            else
-            {
-                if (entry.IsMarked() == true)
-                {
-                    entry.SetSearchMark(false, "");
-                    rowsChanged.push_back(iRow);
-                }
-            }
-            ++iRow;
-        });
+        std::for_each(  m_entries.begin(),
+                        m_entries.end(),
+                        [=, &trace, &text, &iCount, &iRow, &ids, &rowsChanged](IData* entry){
+                            CLogEntry *lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (lpEntry->Description().find(text) != std::string::npos)
+                                {
+                                    if (lpEntry->IsMarked() == false)
+                                    {
+                                        lpEntry->SetSearchMark(true, text);
+                                        ids.push_back(lpEntry->GetID());
+                                        rowsChanged.push_back(iRow);
+                                        iCount++;
+                                    }
+                                }
+                                else
+                                {
+                                    if (lpEntry->IsMarked() == true)
+                                    {
+                                        lpEntry->SetSearchMark(false, "");
+                                        rowsChanged.push_back(iRow);
+                                    }
+                                }
+                            }
+                            ++iRow;
+                        });
         trace.Trace("entries marked as required : %d", ids.size());
         //Signal which rows are changed
         std::for_each(rowsChanged.begin(), rowsChanged.end(), [=, &trace](int& row){
@@ -383,19 +368,31 @@ int QLogFileModel::rowGetNextSearchFoundItem(const QModelIndex& currentIdx)
             // From current position to the end of the file
             for (int idx = currentIdx.row() + 1; idx < m_entries.size(); idx++)
             {
-                if (m_entries[idx].IsEntryRequired() == true)
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(m_entries[idx]);
+                if (lpEntry != nullptr)
                 {
-                    trace.Trace("Next item idx : %ld", idx);
-                    return idx;
+                    if (lpEntry->IsEntryRequired() == true)
+                    {
+                        trace.Trace("Next item idx : %ld", idx);
+                        return idx;
+                    }
                 }
+                else
+                    trace.Error("IData is not of CLogEntry type");
             }
             // From the beginning of the file until the current position
             for (int idx = 0; idx < currentIdx.row(); idx++)
             {
-                if (m_entries[idx].IsEntryRequired() == true)
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry *>(m_entries[idx]);
+                if (lpEntry != nullptr)
                 {
-                    trace.Trace("Next item idx : %ld", idx);
-                    return idx;
+                    if (lpEntry->IsEntryRequired() == true)
+                    {
+                        trace.Trace("Next item idx : %ld", idx);
+                        return idx;
+                    }
+                    else
+                        trace.Error("IData is not of CLogEntry type");
                 }
             }
             trace.Error("No next mark found!");

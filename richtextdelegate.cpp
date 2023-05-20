@@ -11,7 +11,7 @@ RichTextDelegate::RichTextDelegate(std::shared_ptr<CTracer> tracer, QObject *par
 void RichTextDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     CFuncTracer trace("RichTextDelegate::paint", m_trace);
-    CLogEntry entry = index.data(Qt::UserRole).value<CLogEntry>();
+/*    CLogEntry entry = index.data(Qt::UserRole).value<CLogEntry>();
     trace.Trace("col :%ld, row:%ld, entry: %s",index.column(), index.row(), entry.Time().c_str());
     trace.Trace("Mark : %s, Required : %s, required text : %s"
                 , (entry.IsMarked() == true)?"TRUE":"FALSE"
@@ -35,7 +35,7 @@ void RichTextDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         drawFocus(painter, opt, option.rect);
         painter->restore();
     }
-    else
+    else*/
         QItemDelegate::paint(painter, option, index);
 }
 
@@ -81,25 +81,30 @@ void RichTextDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, 
             auto entry = logModel->getLogEntry(index.row());
             if(entry)
             {
-                if (entry->IsEntryRequired() == true)
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(&entry);
+                if (lpEntry != nullptr)
                 {
-                    QTextEdit *editText = qobject_cast<QTextEdit *>(editor);
-                    if (editText)
+                    if (lpEntry->IsEntryRequired() == true)
                     {
-                        QList<QTextEdit::ExtraSelection> selections;
-                        QTextCharFormat fmt;
-                        fmt.setUnderlineStyle(QTextCharFormat::SingleUnderline);
-                        fmt.setForeground(QBrush(QColor(200,0,0)));
-                        fmt.setUnderlineColor(QColor(200,0,0));
-                        fmt.setBackground(QBrush(QColor(230,200,200)));
-                        QTextCursor cursor = editText->textCursor();
-                        while (! (cursor = editText->document()->find(QString::fromStdString(entry->GetRequiredText()), cursor)).isNull())
+                        QTextEdit *editText = qobject_cast<QTextEdit *>(editor);
+                        if (editText)
                         {
-                            QTextEdit::ExtraSelection sel = {cursor, fmt };
-                            selections.append(sel);
+                            QList<QTextEdit::ExtraSelection> selections;
+                            QTextCharFormat fmt;
+                            fmt.setUnderlineStyle(QTextCharFormat::SingleUnderline);
+                            fmt.setForeground(QBrush(QColor(200,0,0)));
+                            fmt.setUnderlineColor(QColor(200,0,0));
+                            fmt.setBackground(QBrush(QColor(230,200,200)));
+                            QTextCursor cursor = editText->textCursor();
+                            while (! (cursor = editText->document()->find(
+                                         QString::fromStdString(lpEntry->GetRequiredText()), cursor)).isNull())
+                            {
+                                QTextEdit::ExtraSelection sel = {cursor, fmt };
+                                selections.append(sel);
+                            }
+                            // set, show, go!
+                            editText->setExtraSelections(selections);
                         }
-                        // set, show, go!
-                        editText->setExtraSelections(selections);
                     }
                 }
             }

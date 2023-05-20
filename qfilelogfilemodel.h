@@ -27,7 +27,7 @@ class QLogFileModel : public QAbstractTableModel
     Q_OBJECT
 
 private:
-    QList<CLogEntry> m_entries;
+    QList<IData *> m_entries;
     std::shared_ptr<CTracer> m_trace;
     int pageLength; // Page nr of items that will be viewed in the current window
     int currentPage;
@@ -37,10 +37,10 @@ public:
     int columnCount(const QModelIndex &) const override;
     QVariant data(const QModelIndex &index, int role) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
-    void append(std::vector<CLogEntry> entries);
+    void append(std::vector<IData *> entries);
     void clear();
     long long rowToggleMark(const QModelIndex& index, bool& bMark);
-    std::optional<CLogEntry> getLogEntry(int index) const;
+    IData* getLogEntry(int index) const;
     int rowGetNextToggleMark(QModelIndex& currentIdx);
     std::list<long long> IndicateSearchText(const std::string& text);
     int rowGetNextSearchFoundItem(const QModelIndex& currentIdx);

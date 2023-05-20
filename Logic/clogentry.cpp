@@ -49,10 +49,6 @@ CLogEntry::CLogEntry(std::shared_ptr<CTracer> tracer, const char *time, const ch
     m_seconds = std::atoi(m_time.substr(m_time.find_last_of(":") + 1, m_time.find_first_of(".")).c_str());
     m_milliseconds = std::atoi(m_time.substr(m_time.find_last_of(".") + 1).c_str());
 }
-CLogEntry::CLogEntry(const CLogEntry &itm)
-{
-    CFuncTracer trace("CLogEntry::CLogEntry&", m_trace);
-}
 CLogEntry::CLogEntry(const CLogEntry &&itm)
 {
     CFuncTracer trace("CLogEntry::CLogEntry&&", m_trace);
@@ -115,62 +111,32 @@ CLogEntry& CLogEntry::operator=(const CLogEntry&& itm)
     }
     return *this;
 }
-CLogEntry& CLogEntry::operator=(const CLogEntry& itm)
-{
-    CFuncTracer trace("CLogEntry::operator=&", m_trace);
-    if (this != &itm)
-    {
-        m_trace = itm.m_trace;
-        m_time = itm.m_time;
-        m_level = itm.m_level;
-        m_procId = itm.m_procId;
-        m_threadId = itm.m_threadId;
-        m_classname = itm.m_classname;
-        m_funcName = itm.m_funcName;
-        m_description = itm.m_description;
-        m_ReqText = itm.m_ReqText;
-        m_tracerLevel = itm.m_tracerLevel;
-        m_bMarked = itm.m_bMarked;
-        m_bRequiredText = itm.m_bRequiredText;
-        m_bFunctionFiltered = itm.m_bFunctionFiltered;
-        m_bClassFiltered = itm.m_bClassFiltered;
-        m_bLevelFiltered = itm.m_bLevelFiltered;
-        m_bPIDFiltered = itm.m_bPIDFiltered;
-        m_bTIDFiltered = itm.m_bTIDFiltered;
-        m_ThdId = itm.m_ThdId;
-        m_ProcId = itm.m_ProcId;
-        m_uiTime = itm.m_uiTime;
-        m_hours = itm.m_hours;
-        m_minutes = itm.m_minutes;
-        m_seconds = itm.m_seconds;
-        m_milliseconds = itm.m_milliseconds;
-        m_ID = itm.m_ID;
-    }
-    return *this;
-}
 CLogEntry::~CLogEntry()
 {
     CFuncTracer trace("CLogEntry::~CLogEntry", m_trace, false);
 }
 QString CLogEntry::GetDataElement(int column) const
 {
-    CFuncTracer trace("CLogEntry::GetDataElement", m_trace);
+    CFuncTracer trace("CLogEntry::GetDataElement", m_trace, false);
+    QString sValue = "";
     try
     {
         switch(column)
         {
-            case eDateTime: return QString::fromStdString(Time());
-            case eTraceLevel: return QString::fromStdString(Level());
-            case eProc: return QString::fromStdString(ProcID());
-            case eThread: return QString::fromStdString(ThreadID());
-            case eClass: return QString::fromStdString(Class());
-            case eFunction: return QString::fromStdString(FuncName());
-            case eDescription: return QString::fromStdString(Description());
+            case eIndex: sValue = QString::fromStdString(Index()); break;
+            case eDateTime: sValue = QString::fromStdString(Time()); break;
+            case eTraceLevel: sValue =  QString::fromStdString(Level()); break;
+            case eProc: sValue = QString::fromStdString(ProcID()); break;
+            case eThread: sValue =  QString::fromStdString(ThreadID()); break;
+            case eClass: sValue =  QString::fromStdString(Class()); break;
+            case eFunction: sValue =  QString::fromStdString(FuncName()); break;
+            case eDescription: sValue =  QString::fromStdString(Description()); break;
 
             case eNumOfColumns:
             default:
                 break;
         }
+        trace.Trace("%s",  sValue.toStdString().c_str());
     }
     catch(std::exception& ex)
     {
@@ -180,13 +146,22 @@ QString CLogEntry::GetDataElement(int column) const
     {
         trace.Error("Exception occurred");
     }
-    return QString("");
+    return sValue;
 }
 QColor CLogEntry::GetBackGroundColor(int column) const
 {
+    CFuncTracer trace("CLogEntry::GetBackGroundColor", m_trace, false);
+    int red = 255;
+    int green = 255;
+    int blue = 255;
     if (IsMarked())
-        return QColor(212,235,242);
-    return QColor(255,255,255);
+    {
+        red = 212;
+        green = 235;
+        blue = 242;
+    }
+    trace.Trace("[%d - %p]Red : %ld, Green : %ld, Blue: %ld (Marked : %s)", GetID(), this, red, green, blue, IsMarked()?"MARKED" : "NOT_MARKED");
+    return QColor(red,green,blue);
 }
 TracerLevel CLogEntry::Convert(std::string level)    {
     if (level.find("TRACE") != std::string::npos) return TracerLevel::TRACER_DEBUG_LEVEL;
@@ -212,6 +187,15 @@ CLogEntryContainer::CLogEntryContainer(std::shared_ptr<CTracer> tracer) noexcept
     CFuncTracer trace("CLogEntryContainer::CLogEntryContainer", m_trace);
     try
     {
+        m_mpColumns.clear();
+        m_mpColumns[eColumns::eIndex] = "Index";
+        m_mpColumns[eColumns::eDateTime] = "Date/Time";
+        m_mpColumns[eColumns::eTraceLevel] = "Level";
+        m_mpColumns[eColumns::eProc] = "PID";
+        m_mpColumns[eColumns::eThread] = "TID";
+        m_mpColumns[eColumns::eClass] = "Class";
+        m_mpColumns[eColumns::eFunction] = "Function";
+        m_mpColumns[eColumns::eDescription] = "Description";
     }
     catch(std::exception& ex)
     {
@@ -238,12 +222,16 @@ CLogEntryContainer::~CLogEntryContainer()
         trace.Error("Exception occurred");
     }
 }
-void CLogEntryContainer::append(std::vector<CLogEntry> data)
+void CLogEntryContainer::append(std::vector<IData *> data)
 {
     CFuncTracer trace("CLogEntryContainer::CLogEntryContainer", m_trace);
     try
     {
-        m_entries.reserve((int)(data.max_size() + m_entries.size()));
+        std::for_each(data.begin(), data.end(), [=](IData* item){
+            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(item);
+            if (lpEntry != nullptr)
+                m_entries.push_back(lpEntry);
+        });
     }
     catch(std::exception& ex)
     {
@@ -270,13 +258,19 @@ void CLogEntryContainer::clear()
         trace.Error("Exception occured");
     }
 }
-IData &CLogEntryContainer::GetData(int Row)
+IData *CLogEntryContainer::GetData(int Row)
 {
-    CFuncTracer trace("CLogEntryContainer::GetData", m_trace);
+    CFuncTracer trace("CLogEntryContainer::GetData", m_trace, false);
+    IData *ItemData = nullptr;
     try
     {
+        trace.Trace("Row at %ld has index %s (Marked : %s)", Row, m_entries.at(Row)->Index().c_str(), m_entries.at(Row)->IsMarked() ? "MARKED" : "NOT MARKED");
         if (m_entries.size() > Row)
-                return m_entries.at(Row);
+        {
+            ItemData = m_entries.at(Row);
+            trace.Trace("Address : %p", ItemData);
+            return ItemData;
+        }
     }
     catch(std::exception& ex)
     {
@@ -286,18 +280,106 @@ IData &CLogEntryContainer::GetData(int Row)
     {
         trace.Error("Exception occurred");
     }
-    return IDataContainer::GetData(0);
+    return nullptr;
 }
-
-void CLogEntryContainer::ToggleMark(int Row)
+int CLogEntryContainer::RowCount(void)
 {
-    CFuncTracer trace("CLogEntryContainer::ToggleMark", m_trace);
+    CFuncTracer trace("CLogEntryContainer::RowCount", m_trace, false);
     try
     {
-        if (m_entries[Row].IsMarked())
-            m_entries[Row].SetMark( false );
+        trace.Trace("Count : %ld", m_entries.size());
+        return m_entries.size();
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred: %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return 0;
+}
+int CLogEntryContainer::ColumnCount(void)
+{
+    CFuncTracer trace("CLogEntryContainer::ColumnCount", m_trace, false);
+    try
+    {
+        trace.Trace("Count : %ld", eColumns::eNumOfColumns);
+        return eColumns::eNumOfColumns;
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return 0;
+}
+std::map<int, std::string> CLogEntryContainer::GetColumns(void)
+{
+    CFuncTracer trace("CLogEntryContainer::GetColumns", m_trace);
+    return m_mpColumns;
+}
+
+long long CLogEntryContainer::GetNextToggleMark(int currentRow)
+{
+    CFuncTracer trace("CLogEntryContainer::GetNextToggleMark", m_trace, false);
+    long long id = -1;
+    try
+    {
+        if (currentRow < m_entries.size())
+        {
+            // From current position to the end of the file
+            for (int idx = currentRow + 1; idx < m_entries.size(); idx++)
+                if (m_entries[idx]->IsMarked() == true) return m_entries[idx]->GetID();
+
+            // From the beginning of the file until the current position
+            for (int idx = 0; idx < currentRow; idx++)
+                if (m_entries[idx]->IsMarked() == true) return m_entries[idx]->GetID();
+
+            if(id == -1)
+                trace.Error("No next mark found!");
+            else
+                trace.Trace("Id : %ld", id);
+        }
         else
-            m_entries[Row].SetMark( true );
+            trace.Error("row is out of range: %d", currentRow);
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return id;
+}
+
+long long CLogEntryContainer::ToggleMark(int Row)
+{
+    CFuncTracer trace("CLogEntryContainer::ToggleMark", m_trace);
+    long long id = -1;
+    try
+    {
+        if (m_entries.size() > Row)
+        {
+            id = m_entries.at(Row)->GetID();
+            if (m_entries.at(Row)->IsMarked())
+            {
+                trace.Trace("SetMark false at index %d", id);
+                m_entries.at(Row)->SetMark( false );
+            }
+            else
+            {
+                trace.Trace("SetMark true at index %d", id);
+                m_entries.at(Row)->SetMark( true );
+            }
+
+        }
     }
     catch(std::exception& ex)
     {
@@ -307,4 +389,5 @@ void CLogEntryContainer::ToggleMark(int Row)
     {
         trace.Error("Exception occured");
     }
+    return id;
 }

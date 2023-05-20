@@ -53,42 +53,42 @@ set(PROJECT_SOURCES
     richtextdelegate.h
 )
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(Test
+    qt_add_executable(LogViewer
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
     )
 # Define target properties for Android with Qt 6 as:
-#    set_property(TARGET Test APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
+#    set_property(TARGET LogViewer APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
 #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
 # For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 else()
     if(ANDROID)
-        add_library(Test SHARED
+        add_library(LogViewer SHARED
             ${PROJECT_SOURCES}
         )
 # Define properties for Android with Qt 5 after find_package() calls as:
 #    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
-        add_executable(Test
+        add_executable(LogViewer
             ${PROJECT_SOURCES}
         )
     endif()
 endif()
 
-target_link_libraries(Test PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(LogViewer PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
-set_target_properties(Test PROPERTIES
-    MACOSX_BUNDLE_GUI_IDENTIFIER my.example.com
+set_target_properties(LogViewer PROPERTIES
+    MACOSX_BUNDLE_GUI_IDENTIFIER www.wellnesssweetbonihu.com
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
 )
 
-install(TARGETS Test
+install(TARGETS LogViewer
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(Test)
+    qt_finalize_executable(LogViewer)
 endif()

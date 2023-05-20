@@ -2,14 +2,15 @@
 #include <QObject>
 #include <QString>
 #include <QColor>
+#include <map>
 #include "ctracer.h"
 
 const QColor white(255,255,255);
-class IData : public QObject
+class IData /*: public QObject*/
 {
-    Q_OBJECT
+    /*Q_OBJECT*/
 public:
-    IData():QObject(){}
+    IData()/*:QObject()*/{}
     virtual ~IData(){}
     IData(const IData& itm){};
     IData(IData&& itm){};
@@ -48,8 +49,14 @@ public:
         return *this;
     }
 
-    virtual IData& GetData(int Row) { return nullref;};
-    virtual void ToggleMark(int Row) {};
+    virtual int ColumnCount(void) = 0;
+    virtual std::map<int, std::string> GetColumns(void) = 0;
+    virtual int RowCount(void) = 0; //{ return 0; }
+    virtual IData* GetData(int Row) = 0; //{ return nullptr;};
+    virtual void append(std::vector<IData*> dt) = 0; //{};
+    virtual void clear(void) = 0; //{};
+    virtual long long ToggleMark(int Row) = 0; // {};
+    virtual long long GetNextToggleMark(int currentRow) = 0;
 protected:
     IData nullref;
 private:

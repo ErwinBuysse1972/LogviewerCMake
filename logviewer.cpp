@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QtGui>
 #include <QFileDialog>
+#include <QThreadPool>
 #include <QMenuBar>
 #include <QMenu>
 #include <QTextEdit>
@@ -904,31 +905,56 @@ void LogViewer::update_current_tab(void)
         timer.SetTime("Start");
         QLogFileWidget *current_tab = dynamic_cast<QLogFileWidget*>(tabWidget->widget(m_currentTabIdx));
         timer.SetTime("Get current tab");
-        std::vector<CLogEntry> lines = m_currentLogFile->GetEntries();
-        timer.SetTime("Get the lines");
-        trace.Trace("Lines : %ld", lines.size());
-        current_tab->GetModel()->clear();
-        timer.SetTime("clear the model");
-        current_tab->GetModel()->append(lines);
-        timer.SetTime("Append lines to model");
-        current_tab->GotoTopOfTable();
-
-        if (lines.size() >= 1)
+        std::vector<IData*> lines = m_currentLogFile->GetEntries();
+        if (lines.size() > 0)
         {
-            dtStartTime->setTime(QTime(lines[0].GetTimeHours(),
-                                       lines[0].GetTimeMinutes(),
-                                       lines[0].GetTimeSeconds(),
-                                       lines[0].GetTimeMilliseconds()));
-            dtEndTime->setTime(QTime(lines[0].GetTimeHours(),
-                                     lines[0].GetTimeMinutes(),
-                                     lines[0].GetTimeSeconds(),
-                                     lines[0].GetTimeMilliseconds()));
-            if (lines.size() >= 2)
+            timer.SetTime("Get the lines");
+            trace.Trace("Lines : %ld", lines.size());
+            if (current_tab->GetModel() != nullptr)
             {
-                dtEndTime->setTime(QTime(lines[(lines.size() - 1)].GetTimeHours(),
-                                         lines[(lines.size() - 1)].GetTimeMinutes(),
-                                         lines[(lines.size() - 1)].GetTimeSeconds(),
-                                         lines[(lines.size() - 1)].GetTimeMilliseconds()));
+                current_tab->GetModel()->clear();
+                timer.SetTime("clear the model");
+                current_tab->GetModel()->append(lines);
+            }
+            else if (current_tab->GetCashModel() != nullptr)
+            {
+                current_tab->GetCashModel()->clear();
+                timer.SetTime("clear the model");
+                current_tab->GetCashModel()->append(lines);
+            }
+
+            timer.SetTime("Append lines to model");
+            current_tab->GotoTopOfTable();
+
+            if (lines.size() >= 1)
+            {
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(&lines[0]);
+                if (lpEntry != nullptr)
+                {
+                    dtStartTime->setTime(QTime(lpEntry->GetTimeHours(),
+                                               lpEntry->GetTimeMinutes(),
+                                               lpEntry->GetTimeSeconds(),
+                                               lpEntry->GetTimeMilliseconds()));
+                    dtEndTime->setTime(QTime(lpEntry->GetTimeHours(),
+                                             lpEntry->GetTimeMinutes(),
+                                             lpEntry->GetTimeSeconds(),
+                                             lpEntry->GetTimeMilliseconds()));
+                }
+                else
+                    trace.Error("Entries are not CLogEntries");
+                if (lines.size() >= 2)
+                {
+                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(&lines[(lines.size() - 1)]);
+                    if (lpEntry != nullptr)
+                    {
+                        dtEndTime->setTime(QTime(lpEntry->GetTimeHours(),
+                                                 lpEntry->GetTimeMinutes(),
+                                                 lpEntry->GetTimeSeconds(),
+                                                 lpEntry->GetTimeMilliseconds()));
+                    }
+                }
+                else
+                    trace.Error("Entries are not CLogEntries");
             }
         }
     }
@@ -1536,6 +1562,63 @@ void LogViewer::on_double_click(const CLogEntry& entry)
         trace.Error("Exception occurred");
     }
 }
+void LogViewer::onParsedData(std::vector<IData*> items)
+{
+    CFuncTracer trace("LogViewer::onParsedData", m_trace);
+    try
+    {
+        QLogFileWidget *current_tab = dynamic_cast<QLogFileWidget*>(tabWidget->widget(m_currentTabIdx));
+        if (current_tab->GetModel() != nullptr)
+        {
+            current_tab->GetModel()->clear();
+            current_tab->GetModel()->append(items);
+        }
+        else if (current_tab->GetCashModel() != nullptr)
+        {
+            //current_tab->GetCashModel()->clear();
+            current_tab->GetCashModel()->append(items);
+        }
+        //update status bar
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+
+void LogViewer::onParsedDataFinished(int items)
+{
+    CFuncTracer trace("LogViewer::onParsedDataFinished", m_trace);
+    try
+    {
+        QLogFileWidget *current_tab = dynamic_cast<QLogFileWidget*>(tabWidget->widget(m_currentTabIdx));
+        if (current_tab != nullptr)
+        {
+            auto it = m_mpLogFiles.find(current_tab->GetFilename());
+            if (it != m_mpLogFiles.end())
+            {
+                m_currentLogFile = it->second;
+                update_classFilter();
+                update_functionFilter();
+                update_traceLevels();
+                update_pidFilter();
+                update_tidFilter();
+            }
+        }
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch (...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
 
 void LogViewer::open()
 {
@@ -1550,35 +1633,20 @@ void LogViewer::open()
         QString filename = QFileDialog::getOpenFileName(this, "Open log file", QDir::currentPath(),"All files (*.*) ;; Log files (*.log)");
         if (!filename.isNull())
         {
-            timer.SetTime("Start filename get from dialog");
+            timer.SetTime("01");
             trace.Trace("Filename : %s" , filename.toStdString().c_str());
-            std::shared_ptr<CLogFile> file = std::make_shared<CLogFile>(filename.toStdString().c_str(), m_trace);
-            timer.SetTime("constructed CLogfile");
-            std::vector<CLogEntry> lines = file->GetEntries();
-            trace.Trace("Lines : %ld", lines.size());
-            timer.SetTime("Get lines of the file");
-            QWidget *viewer = new QLogFileWidget(m_trace, lines, this);
-            timer.SetTime("create widget with lines");
-            if (m_mpLogFiles.find(file->Name()) == m_mpLogFiles.end())
-            {
-                m_mpLogFiles.insert(std::make_pair(file->Name(), file));
-                timer.SetTime("Add file to mpLogFile");
-                if (m_mpLogFiles.size() == 1)
-                {
-                    m_currentLogFile = file;
-                    m_currentTabIdx = 0;
-                }
-                timer.SetTime("Update current tab");
-            }
+
+            QWidget *viewer = new QLogFileWidget(m_trace, std::vector<IData *>(), this);
+            timer.SetTime("02");
             QLogFileWidget* logFileWidget = dynamic_cast<QLogFileWidget*>(viewer);
             logFileWidget->SetFileName(filename.toStdString());
-            timer.SetTime("Set filename into widget");
+            timer.SetTime("03");
             tabWidget->addTab(viewer, filename);
-            timer.SetTime("Add tab to widget");
+            timer.SetTime("04");
             logFileWidget->SetTabIndex(tabWidget->indexOf(viewer));
-            timer.SetTime("Select correct tab");
-            connect(logFileWidget, SIGNAL(RowDoubleClicked(const CLogEntry& entry)), this, SLOT(LogViewer::on_double_click));
-            timer.SetTime("Add double row click connection");
+            timer.SetTime("05");
+            connect(logFileWidget, SIGNAL(RowDoubleClicked(CLogEntry&entry)), this, SLOT(LogViewer::on_double_click));
+            timer.SetTime("06");
             // Add drop down registrations
             logFileWidget->RegisterDropDown_StartTime([=, &trace](const std::string& starttime){
                 trace.Trace("Drop down start time selected (time: %s)", starttime.c_str());
@@ -1597,6 +1665,7 @@ void LogViewer::open()
                 // Update GUI
                 update_current_tab();
             });
+            timer.SetTime("07");
             logFileWidget->RegisterDropDown_StopTime([=, &trace](const std::string& stoptime){
                 trace.Trace("Drop down stop time selected (time: %s)", stoptime.c_str());
 
@@ -1606,8 +1675,8 @@ void LogViewer::open()
                 std::string milliseconds = stoptime.substr(stoptime.find_last_of(".") + 1);
 
                 dtEndTime->setTime(QTime(std::atoi(hours.c_str()),
-                                           std::atoi(minutes.c_str()),
-                                           std::atoi(seconds.c_str()),
+                                         std::atoi(minutes.c_str()),
+                                         std::atoi(seconds.c_str()),
                                          std::atoi(milliseconds.c_str())));
                 std::string starttime = dtStartTime->text().toStdString();
                 m_currentLogFile->SetTimeFilter(starttime, stoptime);
@@ -1615,6 +1684,7 @@ void LogViewer::open()
                 // Update GUI
                 update_current_tab();
             });
+            timer.SetTime("08");
             logFileWidget->RegisterDropDown_ProcID([=, &trace](const std::string& procID){
                 trace.Trace("Drop down pocess id selected (process id : %s)", procID.c_str());
                 std::map<std::string, bool> pids = m_currentLogFile->GetPIDs();
@@ -1635,6 +1705,7 @@ void LogViewer::open()
                     update_current_tab();
                 }
             });
+            timer.SetTime("09");
             logFileWidget->RegisterDropDown_ThreadID([=, &trace](const std::string& threadID){
                 trace.Trace("Drop down thread id selectd (thread id : %s)", threadID.c_str());
                 std::map<std::string, bool> tids = m_currentLogFile->GetTIDs();
@@ -1655,17 +1726,18 @@ void LogViewer::open()
                     update_current_tab();
                 }
             });
+            timer.SetTime("10");
             logFileWidget->RegisterDropDown_MarkToggle([=, &trace](QModelIndex index){
                 QLogFileWidget *current_tab = dynamic_cast<QLogFileWidget*>(tabWidget->widget(m_currentTabIdx));
                 if (current_tab != nullptr)
                 {
                     bool bMark = false;
                     long long id = current_tab->ToggleMark(index, bMark);
-                    m_currentLogFile->SetMark(id, bMark);
                 }
                 else
                     trace.Warning("Current tab is not found");
             });
+            timer.SetTime("11");
             logFileWidget->RegisterDropDown_DisableClass([=, &trace](const std::string& cls){
                 trace.Trace("Drop down disable class pushed (class : %s)", cls.c_str());
                 std::map<std::string, bool> classes = m_currentLogFile->GetClasses();
@@ -1694,6 +1766,7 @@ void LogViewer::open()
                     update_current_tab();
                 }
             });
+            timer.SetTime("12");
             logFileWidget->RegisterDropDown_DisableFunc([=, &trace](const std::string& func){
                 trace.Trace("Drop down disable func pushed (func : %s)", func.c_str());
                 std::map<std::string, bool> functions = m_currentLogFile->GetFunctions();
@@ -1718,6 +1791,7 @@ void LogViewer::open()
                     trace.Error("Function is not found in the list");
 
             });
+            timer.SetTime("13");
             logFileWidget->RegisterDropDown_DisableTraceLevel([=, &trace](const std::string& lvl){
                 trace.Trace("Drop down disable tracelevel pushed (level : %s)", lvl.c_str());
                 std::map<std::string, bool> tracelevels = m_currentLogFile->GetTracelevels();
@@ -1746,7 +1820,42 @@ void LogViewer::open()
                 else
                     trace.Error("Tracelevel %s is not found!", lvl.c_str());
             });
+            timer.SetTime("14");
+            ParseFileTask *parseTask = new ParseFileTask(m_trace, filename.toStdString(), 1000, this);
+            parseTask->setAutoDelete(true);
+            parseTask->RegisterOnParsedData([=](std::vector<IData*> items){ onParsedData(items);});
+            parseTask->RegisterOnParsedFinished([=](int items){onParsedDataFinished(items);});
+            QThreadPool::globalInstance()->start(parseTask);
+            timer.SetTime("15");
+
+            if (m_mpLogFiles.find(filename.toStdString()) == m_mpLogFiles.end())
+            {
+                m_mpLogFiles.insert(std::make_pair(filename.toStdString(), parseTask->GetFile()));
+                timer.SetTime("Add file to mpLogFile");
+                if (m_mpLogFiles.size() == 1)
+                {
+                    m_currentLogFile = parseTask->GetFile();
+                    m_currentTabIdx = 0;
+                }
+                timer.SetTime("Update current tab");
+            }
+            timer.SetTime("16");
         }
+        trace.Info("Relative time 01-02 : %s" , timer.GetRelativeTimes("01","02").c_str());
+        trace.Info("Relative time 02-03 : %s" , timer.GetRelativeTimes("02","03").c_str());
+        trace.Info("Relative time 03-04 : %s" , timer.GetRelativeTimes("03","04").c_str());
+        trace.Info("Relative time 04-05 : %s" , timer.GetRelativeTimes("04","05").c_str());
+        trace.Info("Relative time 05-06 : %s" , timer.GetRelativeTimes("05","06").c_str());
+        trace.Info("Relative time 06-07 : %s" , timer.GetRelativeTimes("06","07").c_str());
+        trace.Info("Relative time 07-07 : %s" , timer.GetRelativeTimes("07","08").c_str());
+        trace.Info("Relative time 08-09 : %s" , timer.GetRelativeTimes("08","09").c_str());
+        trace.Info("Relative time 09-10 : %s" , timer.GetRelativeTimes("09","10").c_str());
+        trace.Info("Relative time 10-11 : %s" , timer.GetRelativeTimes("10","11").c_str());
+        trace.Info("Relative time 11-12 : %s" , timer.GetRelativeTimes("11","12").c_str());
+        trace.Info("Relative time 12-13 : %s" , timer.GetRelativeTimes("12","13").c_str());
+        trace.Info("Relative time 13-14 : %s" , timer.GetRelativeTimes("13","14").c_str());
+        trace.Info("Relative time 14-15 : %s" , timer.GetRelativeTimes("14","15").c_str());
+        trace.Info("Relative time 15-16 : %s" , timer.GetRelativeTimes("15","16").c_str());
     }
     catch(std::exception& ex)
     {
@@ -1832,7 +1941,7 @@ void LogViewer::close()
                     trace.Error("QLogfile :%s is not equal to current log file : %s", QLogFile->GetFilename().c_str(), m_currentLogFile->Name().c_str());
             }
             else
-                trace.Error("Currentlogfile %s is not found inside the map", m_currentLogFile->Name());
+                trace.Error("Currentlogfile %s is not found inside the map", m_currentLogFile->Name().c_str());
         }
         else
             trace.Error("QLogFile is not of the correct type");

@@ -10,14 +10,15 @@
 
 enum eColumns : int
 {
-    eDateTime = 0,
-    eTraceLevel = 1,
-    eProc = 2,
-    eThread = 3,
-    eClass = 4,
-    eFunction = 5,
-    eDescription = 6,
-    eNumOfColumns = 7
+    eIndex = 0,
+    eDateTime = 1,
+    eTraceLevel = 2,
+    eProc = 3,
+    eThread = 4,
+    eClass = 5,
+    eFunction = 6,
+    eDescription = 7,
+    eNumOfColumns = 8
 };
 
 class CLogEntry : public IData
@@ -26,12 +27,13 @@ public:
     CLogEntry() noexcept;
     CLogEntry(std::shared_ptr<CTracer> tracer, const char *time, const char* level, const char *procId, const char *threadId, const char *classname,
               const char *func, const char* desc) noexcept;
-    CLogEntry(const CLogEntry& itm);
+    CLogEntry(const CLogEntry& itm) = delete;
     CLogEntry(const CLogEntry&& itm);
     virtual ~CLogEntry();
-    CLogEntry& operator=(const CLogEntry& itm);
+    CLogEntry& operator=(const CLogEntry& itm) = delete;
     CLogEntry& operator=(const CLogEntry&& itm);
 
+    std::string Index(void) const { return std::to_string(m_ID);}
     std::string Time(void) const { return m_time; }
     std::string Level(void) const { return m_level; }
     std::string ProcID(void) const { return m_procId; }
@@ -41,7 +43,12 @@ public:
     std::string Description(void) const { return m_description; }
     long long GetID(void) const { return m_ID; }
     void AddDescription(const char *s){ m_description += s;}
-    void SetMark(bool bmark){ m_bMarked = bmark;}
+    void SetMark(bool bmark)
+    {
+        CFuncTracer trace("CLogEntry::SetMark", m_trace, false);
+        trace.Trace("[%p] %s", this, (bmark)?"MARKED" : "NOT_MARKED");
+        m_bMarked = bmark;
+    }
     void SetSearchMark(bool required, const std::string& text){ m_bRequiredText = required; m_ReqText = text;}
     void FilterFunction(bool bFiltered){ m_bFunctionFiltered = bFiltered;}
     void FilterClass(bool bFiltered){ m_bClassFiltered = bFiltered;}
@@ -102,7 +109,7 @@ private:
     long long m_ID;
 };
 
-class CLogEntryContainer : IDataContainer
+class CLogEntryContainer : public IDataContainer
 {
 public:
     CLogEntryContainer(std::shared_ptr<CTracer> tracer) noexcept;
@@ -114,13 +121,17 @@ public:
 
 
 
-    void append(std::vector<CLogEntry> data);
-    void clear();
-    IData& GetData(int Row) override;
-    void ToggleMark(int Row) override;
+    void append(std::vector<IData *> data) override;
+    void clear() override;
+    long long ToggleMark(int Row) override;
+    long long GetNextToggleMark(int currentRow) override;
+    int RowCount(void) override;
+    int ColumnCount(void) override;
+    IData* GetData(int Row) override;
+    std::map<int, std::string> GetColumns(void) override;
 
 private:
-    std::vector<CLogEntry> m_entries;
-    CLogEntry nullRef;
+    std::vector<CLogEntry *> m_entries;
+    std::map<int, std::string> m_mpColumns;
     std::shared_ptr<CTracer> m_trace;
 };
