@@ -239,32 +239,30 @@ QVariant QCashFileModel::data(const QModelIndex &index, int role) const
     }
     return QVariant();
 }
-
-long long QCashFileModel::rowGetNextToggleMark(QModelIndex& currentIdx)
+long long QCashFileModel::CashCurrentPosition(int position)
 {
-    CFuncTracer trace("QCashFileModel::rowGetNextToggleMark", m_trace);
+    CFuncTracer trace("QCashFileModel::CashCurrentPosition", m_trace);
     try
     {
-        long long id = m_container->GetNextToggleMark(currentIdx.row());
-        if (id >= 0)
+        if (position >= 0)
         {
-            if (id > m_rows.lastIndex())
+            if (position > m_rows.lastIndex())
             {
-                if (id - m_rows.lastIndex() > lookAhead)
-                    cacheRows(id-halfLookAhead, qMin(m_count, id+halfLookAhead));
-                else while (id > m_rows.lastIndex())
+                    if (position - m_rows.lastIndex() > lookAhead)
+                cacheRows(position-halfLookAhead, qMin(m_count, position+halfLookAhead));
+                    else while (position > m_rows.lastIndex())
                 {
                     m_rows.append(fetchRow(m_rows.lastIndex() + 1));
                 }
-            } else if (id < m_rows.firstIndex()){
-                if (m_rows.firstIndex() - id > lookAhead)
-                    cacheRows( qMax(0, id-halfLookAhead), id+halfLookAhead);
-                else while (id < m_rows.firstIndex())
+            } else if (position < m_rows.firstIndex()){
+                    if (m_rows.firstIndex() - position > lookAhead)
+                cacheRows( qMax(0, position-halfLookAhead), position+halfLookAhead);
+                    else while (position < m_rows.firstIndex())
                 {
                     m_rows.prepend(fetchRow(m_rows.firstIndex() - 1));
                 }
             }
-            return id;
+            return position;
         }
     }
     catch(std::exception& ex)
@@ -276,6 +274,42 @@ long long QCashFileModel::rowGetNextToggleMark(QModelIndex& currentIdx)
         trace.Error("Exception occurred");
     }
     return -1;
+}
+long long QCashFileModel::rowGetNextSearchFoundItem(const QModelIndex& currentIdx)
+{
+    CFuncTracer trace("QCashFileModel::rowGetNextSearchFoundItem", m_trace);
+    long long id = -1;
+    try
+    {
+        id = m_container->GetNextRequiredText(currentIdx.row());
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return id;
+}
+long long QCashFileModel::rowGetNextToggleMark(QModelIndex& currentIdx)
+{
+    CFuncTracer trace("QCashFileModel::rowGetNextToggleMark", m_trace);
+    long long id = -1;
+    try
+    {
+        id = m_container->GetNextToggleMark(currentIdx.row());
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return id;
 }
 
 long long QCashFileModel::rowToggleMark(const QModelIndex &index, bool &bMark)

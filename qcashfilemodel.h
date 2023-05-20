@@ -23,6 +23,8 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
     long long rowToggleMark(const QModelIndex& index, bool& bMark);
     long long rowGetNextToggleMark(QModelIndex& currentIdx);
+    long long rowGetNextSearchFoundItem(const QModelIndex& currentIdx);
+    long long CashCurrentPosition(int position);
     void append(std::vector<IData *> dt);
     void clear();
     IData* getLogEntry(int index) const;

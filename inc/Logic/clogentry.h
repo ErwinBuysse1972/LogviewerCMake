@@ -125,6 +125,7 @@ public:
     void clear() override;
     long long ToggleMark(int Row) override;
     long long GetNextToggleMark(int currentRow) override;
+    long long GetNextRequiredText(int currentRow) override;
     int RowCount(void) override;
     int ColumnCount(void) override;
     IData* GetData(int Row) override;

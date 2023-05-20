@@ -57,6 +57,7 @@ public:
     virtual void clear(void) = 0; //{};
     virtual long long ToggleMark(int Row) = 0; // {};
     virtual long long GetNextToggleMark(int currentRow) = 0;
+    virtual long long GetNextRequiredText(int currentRow) = 0;
 protected:
     IData nullref;
 private:

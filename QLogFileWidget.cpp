@@ -166,8 +166,10 @@ void QLogFileWidget::GotoToNextMark(void)
             if (row >= 0)
             {
                 QModelIndex nextMark = m_cashModel->CreateIndex(row, 0);
-
-                m_View->setCurrentIndex(nextMark);
+                if (m_cashModel->CashCurrentPosition(row) < 0)
+                    trace.Error("Couldn't cash the position %ld", row);
+                else
+                    m_View->setCurrentIndex(nextMark);
                 return;
             }
         }
@@ -191,15 +193,34 @@ void QLogFileWidget::GotoNextRequiredText(void)
     {
         // Find next mark
         QModelIndex index = m_View->currentIndex();
-        int row = m_Model->rowGetNextSearchFoundItem(index);
-        if (row >= 0)
+        if (m_Model != nullptr)
         {
-            QModelIndex nextMark = m_Model->CreateIndex(row, 0);
-            m_View->setCurrentIndex(nextMark);
+            int row = m_Model->rowGetNextSearchFoundItem(index);
+            if (row >= 0)
+            {
+                QModelIndex nextMark = m_Model->CreateIndex(row, 0);
+                m_View->setCurrentIndex(nextMark);
+            }
+            else
+            {
+                trace.Error("No next search found!");
+            }
         }
-        else
+        else if (m_cashModel != nullptr)
         {
-            trace.Error("No next search found!");
+            int row = m_cashModel->rowGetNextSearchFoundItem(index);
+            if (row >= 0)
+            {
+                QModelIndex nextMark = m_cashModel->CreateIndex(row, 0);
+                if (m_cashModel->CashCurrentPosition(row) < 0)
+                    trace.Error("Could not cash position %ld", row);
+                else
+                    m_View->setCurrentIndex(nextMark);
+            }
+            else
+            {
+                trace.Error("No next search found!");
+            }
         }
     }
     catch(std::exception& ex)
@@ -225,7 +246,10 @@ void QLogFileWidget::GotoTopOfTable(void)
         else if (m_cashModel != nullptr)
         {
             top = m_cashModel->CreateIndex(0,0);
-            m_View->setCurrentIndex(top);
+            if (m_cashModel->CashCurrentPosition(top.row()) < 0)
+                trace.Error("Could not cash position %ld", top.row());
+            else
+                m_View->setCurrentIndex(top);
         }
     }
     catch(std::exception& ex)

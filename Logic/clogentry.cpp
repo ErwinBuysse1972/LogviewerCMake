@@ -323,7 +323,40 @@ std::map<int, std::string> CLogEntryContainer::GetColumns(void)
     CFuncTracer trace("CLogEntryContainer::GetColumns", m_trace);
     return m_mpColumns;
 }
+long long CLogEntryContainer::GetNextRequiredText(int currentRow)
+{
+    CFuncTracer trace("CLogEntryContainer::GetNextRequiredText", m_trace);
+    long long id = -1;
+    try
+    {
+        if (currentRow < m_entries.size())
+        {
+            // From current position to the end of the file
+            for (int idx = currentRow + 1; idx < m_entries.size(); idx++)
+                if (m_entries[idx]->IsEntryRequired() == true) return m_entries[idx]->GetID();
 
+            // From the beginning of the file until the current position
+            for (int idx = 0; idx < currentRow; idx++)
+                if (m_entries[idx]->IsEntryRequired() == true) return m_entries[idx]->GetID();
+
+            if(id == -1)
+                trace.Error("No next required text found!");
+            else
+                trace.Trace("Id : %ld", id);
+        }
+        else
+            trace.Error("row is out of range: %d", currentRow);
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return id;
+}
 long long CLogEntryContainer::GetNextToggleMark(int currentRow)
 {
     CFuncTracer trace("CLogEntryContainer::GetNextToggleMark", m_trace, false);
