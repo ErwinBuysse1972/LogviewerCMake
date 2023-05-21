@@ -10,33 +10,39 @@ RichTextDelegate::RichTextDelegate(std::shared_ptr<CTracer> tracer, QObject *par
 
 void RichTextDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    CFuncTracer trace("RichTextDelegate::paint", m_trace);
-/*    CLogEntry entry = index.data(Qt::UserRole).value<CLogEntry>();
-    trace.Trace("col :%ld, row:%ld, entry: %s",index.column(), index.row(), entry.Time().c_str());
-    trace.Trace("Mark : %s, Required : %s, required text : %s"
-                , (entry.IsMarked() == true)?"TRUE":"FALSE"
-                , (entry.IsEntryRequired() == true)?"TRUE":"FALSE"
-                , (entry.GetRequiredText().c_str()));
-    if (   (index.column() == (int)eColumns::eDescription)
-        &&(entry.IsEntryRequired()) )
+    CFuncTracer trace("RichTextDelegate::paint", m_trace, false);
+    try
     {
-        trace.Trace("text should be placed in red: %s", entry.Description().c_str());
-        painter->save();
-        QStyleOptionViewItem opt = setOptions(index, option);
-        drawBackground(painter, opt, index);
-        painter->setFont(opt.font);
-        painter->setPen(Qt::red);
-        opt.backgroundBrush = QBrush(QColor(230,200,200));
-        opt.font.setBold(true);
-        opt.font.setUnderline(true);
-        drawBackground(painter, opt, index);
-        painter->setFont(opt.font);
-        painter->drawText(opt.rect, opt.displayAlignment, QString::fromStdString(entry.Description().c_str()));
-        drawFocus(painter, opt, option.rect);
-        painter->restore();
+        QString sDescription = index.data(Qt::UserRole).value<QString>();
+        if (  (sDescription.isEmpty() == false)
+            &&(index.column() == eColumns::eDescription))
+        {
+            trace.Trace("text should be placed in red: %s", sDescription.toStdString().c_str());
+            painter->save();
+            QStyleOptionViewItem opt = setOptions(index, option);
+            drawBackground(painter, opt, index);
+            painter->setFont(opt.font);
+            painter->setPen(Qt::red);
+            opt.backgroundBrush = QBrush(QColor(230,200,200));
+            opt.font.setBold(true);
+            opt.font.setUnderline(true);
+            drawBackground(painter, opt, index);
+            painter->setFont(opt.font);
+            painter->drawText(opt.rect, opt.displayAlignment, sDescription);
+            drawFocus(painter, opt, option.rect);
+            painter->restore();
+        }
+        else
+            QItemDelegate::paint(painter, option, index);
     }
-    else*/
-        QItemDelegate::paint(painter, option, index);
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred: %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
 }
 
 QSize RichTextDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const

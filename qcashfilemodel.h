@@ -23,6 +23,7 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
     long long rowToggleMark(const QModelIndex& index, bool& bMark);
     long long rowGetNextToggleMark(QModelIndex& currentIdx);
+    std::list<long long> IndicateSearchText(const std::string& text);
     long long rowGetNextSearchFoundItem(const QModelIndex& currentIdx);
     long long CashCurrentPosition(int position);
     void append(std::vector<IData *> dt);
@@ -35,6 +36,5 @@ private:
 
     mutable IDataContainer *m_container;
     mutable QContiguousCache<IData *> m_rows;
-    const int m_count;
     std::shared_ptr<CTracer> m_trace;
 };

@@ -21,7 +21,6 @@ QCashFileModel::QCashFileModel(std::shared_ptr<CTracer> tracer,
     : QAbstractTableModel(parent)
     , m_container(container)
     , m_rows(bufferSize)
-    , m_count(10000)
     , m_trace(tracer)
 {
     CFuncTracer trace("QCashFileModel::QCashFileModel", m_trace);
@@ -186,7 +185,8 @@ QVariant QCashFileModel::data(const QModelIndex &index, int role) const
                         "Unknown");
 
         if (  (role != Qt::DisplayRole)
-            &&(role != Qt::BackgroundRole))
+            &&(role != Qt::BackgroundRole)
+            &&(role != Qt::UserRole))
             return QVariant();
 
         int row = index.row();
@@ -194,7 +194,7 @@ QVariant QCashFileModel::data(const QModelIndex &index, int role) const
 
         if (row > m_rows.lastIndex()){
             if (row - m_rows.lastIndex() > lookAhead)
-                cacheRows(row-halfLookAhead, qMin(m_count, row+halfLookAhead));
+                cacheRows(row-halfLookAhead, qMin(m_container->RowCount(), row+halfLookAhead));
             else while (row > m_rows.lastIndex())
             {
                 m_rows.append(fetchRow(m_rows.lastIndex() + 1));
@@ -224,6 +224,13 @@ QVariant QCashFileModel::data(const QModelIndex &index, int role) const
                     QBrush bgBrush(clr);
                     return bgBrush;
                 }
+                case Qt::UserRole:
+                {
+                    if (data_row->IsTextRequired() == true)
+                        return data_row->GetDataElement(eColumns::eDescription);
+                    else
+                        return QString("");
+                }
                 default:
                     break;
             }
@@ -249,7 +256,7 @@ long long QCashFileModel::CashCurrentPosition(int position)
             if (position > m_rows.lastIndex())
             {
                     if (position - m_rows.lastIndex() > lookAhead)
-                cacheRows(position-halfLookAhead, qMin(m_count, position+halfLookAhead));
+                cacheRows(position-halfLookAhead, qMin(m_container->RowCount(), position+halfLookAhead));
                     else while (position > m_rows.lastIndex())
                 {
                     m_rows.append(fetchRow(m_rows.lastIndex() + 1));
@@ -275,6 +282,34 @@ long long QCashFileModel::CashCurrentPosition(int position)
     }
     return -1;
 }
+std::list<long long> QCashFileModel::IndicateSearchText(const std::string& text)
+{
+    CFuncTracer trace("QCashFileModel::IndicateSearchText", m_trace);
+    std::list<long long> ids;
+    std::list<int> rows_changed;
+    try
+    {
+
+        ids =  m_container->IndicateSearchText(text, rows_changed);
+        //Signal which rows are changed
+        std::for_each(rows_changed.begin(), rows_changed.end(), [=, &trace](int& row){
+            trace.Trace("row %ld is changed", row);
+            QModelIndex first = createIndex(row, 0);
+            QModelIndex last = createIndex(row, (int)eColumns::eNumOfColumns);
+            emit dataChanged(first, last);
+        });
+        return ids;
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception ocucrred");
+    }
+    return std::list<long long>();
+}
 long long QCashFileModel::rowGetNextSearchFoundItem(const QModelIndex& currentIdx)
 {
     CFuncTracer trace("QCashFileModel::rowGetNextSearchFoundItem", m_trace);
@@ -282,6 +317,7 @@ long long QCashFileModel::rowGetNextSearchFoundItem(const QModelIndex& currentId
     try
     {
         id = m_container->GetNextRequiredText(currentIdx.row());
+        trace.Trace("Id of next search Found item : %ld", id);
     }
     catch(std::exception& ex)
     {
@@ -323,7 +359,7 @@ long long QCashFileModel::rowToggleMark(const QModelIndex &index, bool &bMark)
 
         if (row > m_rows.lastIndex()){
             if (row - m_rows.lastIndex() > lookAhead)
-                cacheRows(row-halfLookAhead, qMin(m_count, row+halfLookAhead));
+                cacheRows(row-halfLookAhead, qMin(m_container->RowCount(), row+halfLookAhead));
             else while (row > m_rows.lastIndex())
             {
                 m_rows.append(fetchRow(m_rows.lastIndex() + 1));
@@ -408,7 +444,7 @@ IData* QCashFileModel::getLogEntry(int index) const
     {
         if (index > m_rows.lastIndex()){
             if (index - m_rows.lastIndex() > lookAhead)
-            cacheRows(index-halfLookAhead, qMin(m_count, index+halfLookAhead));
+            cacheRows(index-halfLookAhead, qMin(m_container->RowCount(), index+halfLookAhead));
             else while (index > m_rows.lastIndex())
             {
                 m_rows.append(fetchRow(m_rows.lastIndex() + 1));

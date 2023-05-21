@@ -188,13 +188,16 @@ void QLogFileWidget::GotoToNextMark(void)
 }
 void QLogFileWidget::GotoNextRequiredText(void)
 {
-    CFuncTracer trace("QLogFileWidget::GotoNextRequiredText", m_trace);
+    CFuncTracer trace("QLogFileWidget::GotoNextRequiredText", m_trace, false);
     try
     {
         // Find next mark
         QModelIndex index = m_View->currentIndex();
         if (m_Model != nullptr)
         {
+            if (index.row() == -1)
+                index = m_Model->CreateIndex(0,0);
+
             int row = m_Model->rowGetNextSearchFoundItem(index);
             if (row >= 0)
             {
@@ -208,6 +211,10 @@ void QLogFileWidget::GotoNextRequiredText(void)
         }
         else if (m_cashModel != nullptr)
         {
+            if (index.row() == -1)
+                index = m_cashModel->CreateIndex(0,0);
+
+            trace.Info("current index : %ld(row), %ld(column)", index.row(), index.column());
             int row = m_cashModel->rowGetNextSearchFoundItem(index);
             if (row >= 0)
             {
@@ -215,7 +222,10 @@ void QLogFileWidget::GotoNextRequiredText(void)
                 if (m_cashModel->CashCurrentPosition(row) < 0)
                     trace.Error("Could not cash position %ld", row);
                 else
+                {
+                    trace.Info("Set CurrentIndex: %ld (row), %ld (column)", nextMark.row(), nextMark.column());
                     m_View->setCurrentIndex(nextMark);
+                }
             }
             else
             {
@@ -267,11 +277,14 @@ void QLogFileWidget::row_double_click(const QModelIndex &  index)
     try
     {
         trace.Trace("index : %ld", index);
-        IData *entry = GetModel()->getLogEntry(index.row());
-        if (entry != nullptr)
+        if (GetModel() != nullptr)
         {
-            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
-            emit RowDoubleClicked(lpEntry);
+            IData *entry = GetModel()->getLogEntry(index.row());
+            if (entry != nullptr)
+            {
+                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                emit RowDoubleClicked(lpEntry);
+            }
         }
     }
     catch(std::exception& ex)

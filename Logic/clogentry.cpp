@@ -2,6 +2,7 @@
 #include "clogentry.h"
 #include <algorithm>
 #include <QColor>
+#include <QAbstractItemModel>
 
 CLogEntry::CLogEntry() noexcept
     : m_time("")
@@ -282,6 +283,28 @@ IData *CLogEntryContainer::GetData(int Row)
     }
     return nullptr;
 }
+bool CLogEntryContainer::IsTextRequired(int Row)
+{
+    CFuncTracer trace("CLogEntryContainer::IsTextHighlighted", m_trace,false);
+    bool bRequired = false;
+    try
+    {
+        if (m_entries.size() > Row)
+        {
+            bRequired = m_entries.at(Row)->IsEntryRequired();
+        }
+        trace.Trace("Required : %s", (bRequired == true)?"REQUIRED":"NOT REQUIRED");
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception ocucrred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return bRequired;
+}
 int CLogEntryContainer::RowCount(void)
 {
     CFuncTracer trace("CLogEntryContainer::RowCount", m_trace, false);
@@ -356,6 +379,48 @@ long long CLogEntryContainer::GetNextRequiredText(int currentRow)
         trace.Error("Exception occurred");
     }
     return id;
+}
+std::list<long long> CLogEntryContainer::IndicateSearchText(const std::string& text, std::list<int>& rowsChanged)
+{
+    CFuncTracer trace("CLogEntryContainer::IndicateSearchText", m_trace);
+    int iCount = 0;
+    int iRow = 0;
+    std::list<long long> ids;
+    try
+    {
+        trace.Trace("Text : %s", text.c_str());
+        rowsChanged.clear();
+        std::for_each(  m_entries.begin(),
+                      m_entries.end(),
+                      [=, &trace, &text, &iCount, &iRow, &ids, &rowsChanged](CLogEntry* entry){
+                          if (entry->Description().find(text) != std::string::npos)
+                          {
+                              entry->SetSearchMark(true, text);
+                              ids.push_back(entry->GetID());
+                              rowsChanged.push_back(iRow);
+                              iCount++;
+                          }
+                          else
+                          {
+                              if (entry->IsEntryRequired() == true)
+                              {
+                                  entry->SetSearchMark(false, "");
+                                  rowsChanged.push_back(iRow);
+                              }
+                          }
+                          ++iRow;
+                      });
+        trace.Trace("entries marked as required : %d", ids.size());
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+    return ids;
 }
 long long CLogEntryContainer::GetNextToggleMark(int currentRow)
 {

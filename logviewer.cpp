@@ -1303,23 +1303,36 @@ void LogViewer::on_search_text(void)
         {
             m_searchDialog = new SearchForm([=, &trace](const std::string& text, bool err)
                                                     {
-                                                        trace.Info("search text : %s", text.c_str());
-
                                                           if (  (text.empty() == false)
                                                               &&(err == false))
                                                           {
-                                                              trace.Info("text : %s", text.c_str());
                                                               QLogFileWidget *current_tab = dynamic_cast<QLogFileWidget*>(tabWidget->widget(m_currentTabIdx));
                                                               if (current_tab != nullptr)
                                                               {
-                                                                  std::list<long long> ids = current_tab->GetModel()->IndicateSearchText(text);
-                                                                  if (ids.size() > 0)
+                                                                  if (current_tab->GetModel() != nullptr)
                                                                   {
-                                                                      std::for_each(ids.begin(), ids.end(), [=, &text](long long& id){
-                                                                          m_currentLogFile->SetRequiredText(id, text, true);
-                                                                      });
-                                                                      m_bSearchActive = true;
+                                                                      std::list<long long> ids = current_tab->GetModel()->IndicateSearchText(text);
+                                                                      if (ids.size() > 0)
+                                                                      {
+                                                                          std::for_each(ids.begin(), ids.end(), [=, &text](long long& id){
+                                                                              m_currentLogFile->SetRequiredText(id, text, true);
+                                                                          });
+                                                                          m_bSearchActive = true;
+                                                                      }
                                                                   }
+                                                                  else if (current_tab->GetCashModel() != nullptr)
+                                                                  {
+                                                                      std::list<long long> ids = current_tab->GetCashModel()->IndicateSearchText(text);
+                                                                      if (ids.size() > 0)
+                                                                      {
+                                                                          std::for_each(ids.begin(), ids.end(), [=, &text](long long& id){
+                                                                              m_currentLogFile->SetRequiredText(id, text, true);
+                                                                          });
+                                                                          m_bSearchActive = true;
+                                                                      }
+                                                                  }
+                                                                  else
+                                                                      trace.Error("Model of the tableview not found!");
                                                               }
                                                               else
                                                                   trace.Error("Current tab not found");

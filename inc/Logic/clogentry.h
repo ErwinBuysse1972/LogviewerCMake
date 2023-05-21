@@ -77,6 +77,7 @@ public:
     std::string GetRequiredText(void) const{ return m_ReqText; }
     QString GetDataElement(int column) const override;
     QColor GetBackGroundColor(int column) const override;
+    bool IsTextRequired(void) const override {return IsEntryRequired(); };
 
     static TracerLevel Convert(std::string level);
     static unsigned long long GetUiTime(std::string sTime);
@@ -125,10 +126,12 @@ public:
     void clear() override;
     long long ToggleMark(int Row) override;
     long long GetNextToggleMark(int currentRow) override;
-    long long GetNextRequiredText(int currentRow) override;
+    std::list<long long> IndicateSearchText(const std::string& text, std::list<int>& rowsChanged) override;
+    long long GetNextRequiredText(int Row) override;
     int RowCount(void) override;
     int ColumnCount(void) override;
     IData* GetData(int Row) override;
+    bool IsTextRequired(int Row) override;
     std::map<int, std::string> GetColumns(void) override;
 
 private:
