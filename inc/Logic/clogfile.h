@@ -6,173 +6,14 @@
 #include <cconfigsettings.h>
 #include <cfunctracer.h>
 #include <ctracer.h>
-
-class CLogEntry
-{
-public:
-    CLogEntry() noexcept
-        : m_time("")
-        , m_level("")
-        , m_procId("")
-        , m_threadId("")
-        , m_classname("")
-        , m_funcName("")
-        , m_description("")
-        , m_bMarked(false)
-        , m_ThdId(-1)
-        , m_ProcId(-1)
-        , m_uiTime(0)
-        , m_ID(-1)
-    {
-
-    }
-    CLogEntry(std::shared_ptr<CTracer> tracer, const char *time, const char* level, const char *procId, const char *threadId, const char *classname,
-              const char *func, const char* desc) noexcept
-        : m_trace(tracer)
-        , m_time(time)
-        , m_level(level)
-        , m_procId(procId)
-        , m_threadId(threadId)
-        , m_classname(classname)
-        , m_funcName(func)
-        , m_description(desc)
-        , m_ReqText("")
-        , m_bMarked(false)
-        , m_bRequiredText(false)
-        , m_bFunctionFiltered(false)
-        , m_bClassFiltered(false)
-        , m_bLevelFiltered(false)
-        , m_bPIDFiltered(false)
-        , m_bTIDFiltered(false)
-    {
-        CFuncTracer trace("CLogEntry::CLogEntry", m_trace, false);
-        m_ThdId = std::atoi(m_threadId.c_str());
-        m_ProcId = std::atoi(m_procId.c_str());
-        m_tracerLevel = Convert(m_level);
-        m_uiTime = CLogEntry::GetUiTime(m_time);
-        m_ID = m_genID++;
-
-        m_hours = std::atoi(m_time.substr(0, m_time.find_first_of(":")).c_str());
-        m_minutes = std::atoi(m_time.substr(m_time.find_first_of(":") + 1, m_time.find_last_of(":")).c_str());
-        m_seconds = std::atoi(m_time.substr(m_time.find_last_of(":") + 1, m_time.find_first_of(".")).c_str());
-        m_milliseconds = std::atoi(m_time.substr(m_time.find_last_of(".") + 1).c_str());
-    }
-    bool operator>(const CLogEntry& item)
-    {
-        return m_uiTime > item.m_uiTime;
-    }
-    bool operator<(const CLogEntry& item)
-    {
-        return m_uiTime < item.m_uiTime;
-    }
-    bool operator>=(const CLogEntry& item)
-    {
-        return m_uiTime >= item.m_uiTime;
-    }
-    bool operator <=(const CLogEntry& item)
-    {
-        return m_uiTime <= item.m_uiTime;
-    }
-    bool operator==(const CLogEntry& item)
-    {
-        if (m_uiTime != item.m_uiTime)
-            return false;
-        return !strcmp(m_description.c_str(), item.m_description.c_str());
-    }
-    virtual ~CLogEntry()
-    {
-        CFuncTracer trace("CLogEntry::~CLogEntry", m_trace, false);
-    }
-
-    std::string Time(void) const { return m_time; }
-    std::string Level(void) const { return m_level; }
-    std::string ProcID(void) const { return m_procId; }
-
-    std::string ThreadID(void) const { return m_threadId;}
-    std::string Class(void) const { return m_classname; }
-    std::string FuncName(void) const { return m_funcName; }
-    std::string Description(void) const { return m_description; }
-    long long GetID(void) const { return m_ID; }
-    void AddDescription(const char *s){ m_description += s;}
-    void SetMark(bool bmark){ m_bMarked = bmark;}
-    void SetSearchMark(bool required, const std::string& text){ m_bRequiredText = required; m_ReqText = text;}
-    void FilterFunction(bool bFiltered){ m_bFunctionFiltered = bFiltered;}
-    void FilterClass(bool bFiltered){ m_bClassFiltered = bFiltered;}
-    void FilterLevel(bool bFiltered){ m_bLevelFiltered = bFiltered;}
-    void FilterPID(bool bFiltered){ m_bPIDFiltered = bFiltered;}
-    void FilterTID(bool bFiltered){ m_bTIDFiltered = bFiltered;}
-
-    TracerLevel GetLevel(void){ return m_tracerLevel;}
-    int GetProcId(void) const { return m_ProcId;}
-    int GetThreadId(void) const { return m_ThdId;}
-    unsigned long long GetTime(void){ return m_uiTime;}
-    int GetTimeHours(void){ return m_hours;}
-    int GetTimeMinutes(void){ return m_minutes;}
-    int GetTimeSeconds(void){ return m_seconds;}
-    int GetTimeMilliseconds(void) { return m_milliseconds;}
-    static TracerLevel Convert(std::string level)    {
-        if (level.find("TRACE") != std::string::npos) return TracerLevel::TRACER_DEBUG_LEVEL;
-        else if (level.find("INFO") != std::string::npos) return TracerLevel::TRACER_INFO_LEVEL;
-        else if (level.find("WARNING") != std::string::npos) return TracerLevel::TRACER_WARNING_LEVEL;
-        else if (level.find("FATAL") != std::string::npos) return TracerLevel::TRACER_FATAL_ERROR_LEVEL;
-        else if (level.find("ERROR") != std::string::npos) return TracerLevel::TRACER_ERROR_LEVEL;
-        return TracerLevel::TRACER_OFF_LEVEL;
-    }
-    unsigned long GetClassLength(){ return m_classname.length();}
-    unsigned long GetFuncNameLength(){ return m_funcName.length();}
-    unsigned long GetDescriptionLength(){ return m_description.length();}
-    bool IsMarked(void) const{ return m_bMarked;}
-    bool IsEntryRequired(void) const { return m_bRequiredText; }
-    bool IsClassFiltered(void) const { return m_bClassFiltered; }
-    bool IsFunctionFiltered(void) const{ return m_bFunctionFiltered;}
-    bool IsLevelFiltered(void) const{ return m_bLevelFiltered;}
-    bool IsPIDFiltered(void) const { return m_bPIDFiltered;}
-    bool IsTIDFiltered(void) const { return m_bTIDFiltered;}
-
-    std::string GetRequiredText(void) const{ return m_ReqText; }
-
-    static unsigned long long GetUiTime(std::string sTime)
-    {
-        int hours, minutes, milli, seconds;
-        hours = std::atoi(sTime.substr(0, sTime.find_first_of(":")).c_str());
-        minutes = std::atoi(sTime.substr(sTime.find_first_of(":") + 1, sTime.find_last_of(":")).c_str());
-        seconds = std::atoi(sTime.substr(sTime.find_last_of(":") + 1, sTime.find_first_of(".")).c_str());
-        milli = std::atoi(sTime.substr(sTime.find_last_of(".") + 1).c_str());
-        return ((hours * 3600 + minutes * 60 + seconds) *1000 + milli);
-    }
-private:
-    static long long m_genID;
-    std::shared_ptr<CTracer> m_trace;
-    std::string m_time;
-    std::string m_level;
-    std::string m_procId;
-    std::string m_threadId;
-    std::string m_classname;
-    std::string m_funcName;
-    std::string m_description;
-    std::string m_ReqText;
-    TracerLevel m_tracerLevel;
-    bool m_bMarked;
-    bool m_bRequiredText;
-    bool m_bFunctionFiltered;
-    bool m_bClassFiltered;
-    bool m_bLevelFiltered;
-    bool m_bPIDFiltered;
-    bool m_bTIDFiltered;
-    int m_ThdId;
-    int m_ProcId;
-    unsigned long long m_uiTime;
-    int m_hours;
-    int m_minutes;
-    int m_seconds;
-    int m_milliseconds;
-    long long m_ID;
-};
+#include <functional>
+#include <QRunnable>
+#include "clogentry.h"
 
 class CLogFile
 {
 public:
-    CLogFile(const char* file, std::shared_ptr<CTracer> tracer);
+    CLogFile(const char* file, std::shared_ptr<CTracer> tracer, bool bParse = true);
     CLogFile(const CLogFile& file);
     CLogFile(const CLogFile&& file);
     virtual ~CLogFile();
@@ -180,7 +21,7 @@ public:
     CLogFile& operator=(CLogFile& file);
     CLogFile& operator=(CLogFile&& file);
 
-    std::vector<CLogEntry> GetEntries(void);
+    std::vector<IData *> GetEntries(void);
     std::map<std::string, bool> GetFunctions(void);
     std::map<std::string, bool> GetClasses(void);
     std::map<std::string, bool> GetTracelevels(void);
@@ -224,14 +65,19 @@ public:
     bool IsDescriptionAvailable(void){ return (m_DescIdx >= 0);}
     int GetNumberLines(void){ return m_logEntries.size();}
     int GetNumberFilteredLines(void){ return m_filteredEntries.size();}
+    void parse(void);
+    void parse_MP(void);
     std::string Name(void) const{ return m_name;}
+    void RegisterParsedData(std::function<void (std::vector<IData*> items)> event);
 
 private:
+    int m_parsedItemsBuffer;
     std::shared_ptr<CTracer> m_trace;
     std::string m_name;
     std::string m_saveFileName;
-    std::vector<CLogEntry> m_logEntries;
-    std::vector<CLogEntry> m_filteredEntries;
+    std::recursive_mutex m_mutex;
+    std::vector<IData *> m_logEntries;
+    std::vector<IData *> m_filteredEntries;
     std::string m_sLine;
     std::string m_sTime = "";
     std::string m_sLevel = "";
@@ -248,6 +94,7 @@ private:
     int m_ClassNameIdx;
     int m_FuncIdx;
     int m_DescIdx;
+    int m_CurrentParsedDataIndex;
     unsigned long m_maxDescLength;
     unsigned long m_maxClassLength;
     unsigned long m_maxFuncLength;
@@ -262,9 +109,9 @@ private:
     std::map<std::string, bool> m_TraceLevels;
     std::map<std::string, bool> m_PIDs;
     std::map<std::string, bool> m_TIDs;
+    std::function<void (std::vector<IData*> items)> m_onParsedData;
 
-    void parse(void);
-    void parse_MP(void);
+
     void automaticDetectionFormat_MP(QStringList fields);
     void automaticDetectFormat(std::vector<std::string>& fields);
     bool isTraceLevelValid(const char *level);
@@ -276,4 +123,24 @@ private:
     void UpdateConfigSettings(void);
     int getNrOfLines(const std::string& file);
     int getFileSize(FILE* fp);
+};
+
+class ParseFileTask : public QObject, public QRunnable
+{
+    Q_OBJECT
+public:
+    ParseFileTask(std::shared_ptr<CTracer> tracer, std::string filename, int trunkDataSize, QObject* parent=nullptr);
+    ~ParseFileTask() = default;
+
+    std::shared_ptr<CLogFile> GetFile(void) const { return m_file;}
+    void RegisterOnParsedData(std::function<void(std::vector<IData*> items)> event){ m_onParsedData = event;}
+    void RegisterOnParsedFinished(std::function<void(int items)> event){m_onParsedFinished = event;}
+protected:
+    void run();
+private:
+    int                         m_itemsParsed;
+    std::shared_ptr<CTracer>    m_trace;
+    std::shared_ptr<CLogFile>   m_file;
+    std::function<void(std::vector<IData*> items)> m_onParsedData;
+    std::function<void(int items)> m_onParsedFinished;
 };

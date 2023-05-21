@@ -46,6 +46,8 @@ private slots:
     void onClearFilter_clicked(void);
     void onClearLevelFilter_clicked(void);
     void onClearFunctionFilter_clicked(void);
+    void onParsedData(std::vector<IData*> items);
+    void onParsedDataFinished(int items);
 
     void onTabChanged(int index);
     void on_toggle_mark(void);
@@ -129,6 +131,7 @@ private:
     std::shared_ptr<CLogFile> m_currentLogFile;
     std::map<std::string, std::shared_ptr<CLogFile>> m_mpLogFiles;
     std::vector<TracerLevel> m_filteredLevels;
+
     bool m_bWordOnly;
     bool m_bCaseSensitive;
     bool m_bInverseSearch;

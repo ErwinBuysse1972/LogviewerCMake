@@ -21,8 +21,9 @@
 long long CLogEntry::m_genID = 0;
 
 
-CLogFile::CLogFile(const char* file, std::shared_ptr<CTracer> tracer)
+CLogFile::CLogFile(const char* file, std::shared_ptr<CTracer> tracer, bool bParse)
     : m_trace(tracer)
+    , m_parsedItemsBuffer(1000)
     , m_name(file)
     , m_sLine("")
     , m_sTime("")
@@ -43,6 +44,7 @@ CLogFile::CLogFile(const char* file, std::shared_ptr<CTracer> tracer)
     , m_maxDescLength(0)
     , m_maxClassLength(0)
     , m_maxFuncLength(0)
+    , m_CurrentParsedDataIndex(0)
     , m_SPConfigSettings(std::make_shared<CConfigSettings>(m_trace, m_name))
 {
     CFuncTracer trace("CLogFile::CLogFile", m_trace);
@@ -67,10 +69,13 @@ CLogFile::CLogFile(const char* file, std::shared_ptr<CTracer> tracer)
         timer.SetTime("03");
         m_filteredEntries.reserve(iLines);
         timer.SetTime("04");
-        parse_MP();
-        timer.SetTime("05");
-        trace.Info("entries: %ld", m_logEntries.size());
-        timer.SetTime("06");
+        if (bParse == true)
+        {
+            parse_MP();
+            timer.SetTime("05");
+            trace.Info("entries: %ld", m_logEntries.size());
+            timer.SetTime("06");
+        }
     }
     catch(std::exception& ex)
     {
@@ -84,6 +89,7 @@ CLogFile::CLogFile(const char* file, std::shared_ptr<CTracer> tracer)
 }
 CLogFile::CLogFile(const CLogFile& file)
     : m_trace(file.m_trace)
+    , m_parsedItemsBuffer(file.m_parsedItemsBuffer)
     , m_name(file.m_name)
     , m_sLine(file.m_sLine)
     , m_sTime(file.m_sTime)
@@ -104,6 +110,9 @@ CLogFile::CLogFile(const CLogFile& file)
     , m_maxDescLength(file.m_maxDescLength)
     , m_maxClassLength(file.m_maxClassLength)
     , m_maxFuncLength(file.m_maxFuncLength)
+    , m_CurrentParsedDataIndex(file.m_CurrentParsedDataIndex)
+    , m_onParsedData(file.m_onParsedData)
+
 {
     CFuncTracer trace("CLogFile::CLogFile(COPY)", file.m_trace);
     try
@@ -131,6 +140,7 @@ CLogFile::CLogFile(const CLogFile &&file)
     CFuncTracer trace("CLogFile::CLogFile(MOVE)", file.m_trace);
     try
     {
+        m_parsedItemsBuffer = std::move(file.m_parsedItemsBuffer);
         m_name = std::move(file.m_name);
         m_sLine = std::move(file.m_sLine);
         m_sTime = std::move(file.m_sTime);
@@ -151,6 +161,8 @@ CLogFile::CLogFile(const CLogFile &&file)
         m_maxClassLength = std::move(file.m_maxClassLength);
         m_maxFuncLength = std::move(file.m_maxFuncLength);
         m_logEntries = std::move(file.m_logEntries);
+        m_CurrentParsedDataIndex = std::move(file.m_CurrentParsedDataIndex);
+        m_onParsedData = std::move(file.m_onParsedData);
         m_filteredEntries = std::move(file.m_filteredEntries);
         m_ClassOccurences.insert(file.m_ClassOccurences.begin(), file.m_ClassOccurences.end());
         m_FunctionOccurences.insert(file.m_FunctionOccurences.begin(), file.m_FunctionOccurences.end());
@@ -167,95 +179,6 @@ CLogFile::CLogFile(const CLogFile &&file)
     }
 
 }
-CLogFile& CLogFile::operator=(CLogFile& file)
-{
-    CFuncTracer trace("CLogFile::operator=(&)", file.m_trace);
-    try
-    {
-        if (&file != this)
-        {
-            m_name = file.m_name;
-            m_sLine = file.m_sLine;
-            m_sTime = file.m_sTime;
-            m_sLevel = file.m_sLevel;
-            m_sProcId = file.m_sProcId;
-            m_sThreadId = file.m_sThreadId;
-            m_sClassname = file.m_sClassname;
-            m_sFuncName = file.m_sFuncName;
-            m_sDescription = file.m_sDescription;
-            m_TimeIdx = file.m_TimeIdx;
-            m_LevelIdx = file.m_LevelIdx;
-            m_ProdIdIdx = file.m_ProdIdIdx;
-            m_ThreadIdIdx = file.m_ThreadIdIdx;
-            m_ClassNameIdx = file.m_ClassNameIdx;
-            m_FuncIdx = file.m_FuncIdx;
-            m_DescIdx = file.m_DescIdx;
-            m_maxDescLength = file.m_maxDescLength;
-            m_maxClassLength = file.m_maxClassLength;
-            m_maxFuncLength = file.m_maxFuncLength;
-            m_logEntries = file.m_logEntries;
-            m_filteredEntries = file.m_filteredEntries;
-            m_ClassOccurences.insert(file.m_ClassOccurences.begin(), file.m_ClassOccurences.end());
-            m_FunctionOccurences.insert(file.m_FunctionOccurences.begin(), file.m_FunctionOccurences.end());
-            m_FunctionEntries.insert(file.m_FunctionEntries.begin(), file.m_FunctionEntries.end());
-            m_FunctionExits.insert(file.m_FunctionExits.begin(), file.m_FunctionExits.end());
-        }
-    }
-    catch(std::exception& ex)
-    {
-        trace.Error("Exception occurred : %s", ex.what());
-    }
-    catch(...)
-    {
-        trace.Error("Exception occurred");
-    }
-    return *this;
-}
-CLogFile& CLogFile::operator=(CLogFile&& file)
-{
-    CFuncTracer trace("CLogFile::operator=(&&)", file.m_trace);
-    try
-    {
-        if (&file != this)
-        {
-            m_name = std::move(file.m_name);
-            m_sLine = std::move(file.m_sLine);
-            m_sTime = std::move(file.m_sTime);
-            m_sLevel = std::move(file.m_sLevel);
-            m_sProcId = std::move(file.m_sProcId);
-            m_sThreadId = std::move(file.m_sThreadId);
-            m_sClassname = std::move(file.m_sClassname);
-            m_sFuncName = std::move(file.m_sFuncName);
-            m_sDescription = std::move(file.m_sDescription);
-            m_TimeIdx = std::move(file.m_TimeIdx);
-            m_LevelIdx = std::move(file.m_LevelIdx);
-            m_ProdIdIdx = std::move(file.m_ProdIdIdx);
-            m_ThreadIdIdx = std::move(file.m_ThreadIdIdx);
-            m_ClassNameIdx = std::move(file.m_ClassNameIdx);
-            m_FuncIdx = std::move(file.m_FuncIdx);
-            m_DescIdx = std::move(file.m_DescIdx);
-            m_maxDescLength = std::move(file.m_maxDescLength);
-            m_maxClassLength = std::move(file.m_maxClassLength);
-            m_maxFuncLength = std::move(file.m_maxFuncLength);
-            m_logEntries = std::move(file.m_logEntries);
-            m_filteredEntries = std::move(file.m_filteredEntries);
-            m_ClassOccurences.insert(file.m_ClassOccurences.begin(), file.m_ClassOccurences.end());
-            m_FunctionOccurences.insert(file.m_FunctionOccurences.begin(), file.m_FunctionOccurences.end());
-            m_FunctionEntries.insert(file.m_FunctionEntries.begin(), file.m_FunctionEntries.end());
-            m_FunctionExits.insert(file.m_FunctionExits.begin(), file.m_FunctionExits.end());
-        }
-    }
-    catch(std::exception& ex)
-    {
-        trace.Error("Exception occurred : %s", ex.what());
-    }
-    catch(...)
-    {
-        trace.Error("Exception occurred");
-    }
-    return *this;
-}
-
 CLogFile::~CLogFile()
 {
     CFuncTracer trace("CLogFile::~CLogFile", m_trace);
@@ -272,23 +195,10 @@ CLogFile::~CLogFile()
         trace.Error("Exception occurred");
     }
 }
-std::vector<CLogEntry> CLogFile::GetEntries(void)
+std::vector<IData *> CLogFile::GetEntries(void)
 {
     CFuncTracer trace("CLogFile::GetEntries", m_trace);
-    try
-    {
-        return m_filteredEntries;
-    }
-    catch(std::exception& ex)
-    {
-        trace.Error("Exception occurred : %s", ex.what());
-    }
-    catch(...)
-    {
-        trace.Error("Exception occurred");
-    }
-
-    return std::vector<CLogEntry>();
+    return m_filteredEntries;
 }
 std::map<std::string, bool> CLogFile::GetFunctions(void)
 {
@@ -297,16 +207,29 @@ std::map<std::string, bool> CLogFile::GetFunctions(void)
     {
         if (m_Functions.size() == 0)
         {
-            std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                std::string fullFunctionName = entry.Class() + "::" + entry.FuncName();
-                if (m_Functions.find(fullFunctionName) == m_Functions.end())
-                    m_Functions.insert(std::make_pair(fullFunctionName, (entry.IsFunctionFiltered() == false)));
-            });
-            std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-                std::string fullFunctionName = entry.Class() + "::" + entry.FuncName();
-                if (m_Functions.find(fullFunctionName) == m_Functions.end())
-                    m_Functions.insert(std::make_pair(fullFunctionName, false));
-            });
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(m_filteredEntries.begin(),
+                          m_filteredEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                std::string fullFunctionName = lpEntry->Class() + "::" + lpEntry->FuncName();
+                                if (m_Functions.find(fullFunctionName) == m_Functions.end())
+                                    m_Functions.insert(std::make_pair(fullFunctionName, (lpEntry->IsFunctionFiltered() == false)));
+                            }
+                        });
+            std::for_each(m_logEntries.begin(),
+                          m_logEntries.end(),
+                          [=](IData* entry){
+                                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                if (lpEntry != nullptr)
+                                {
+                                    std::string fullFunctionName = lpEntry->Class() + "::" + lpEntry->FuncName();
+                                    if (m_Functions.find(fullFunctionName) == m_Functions.end())
+                                        m_Functions.insert(std::make_pair(fullFunctionName, false));
+                                }
+                            });
         }
 
         for (std::pair<std::string, bool> p : m_Functions)
@@ -335,25 +258,34 @@ std::map<std::string, bool> CLogFile::GetClasses(void)
         timer.SetTime("start");
         if (m_Classes.size() == 0)
         {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
             timer.SetTime("add m_filteredEntries classes");
             std::for_each(m_filteredEntries.begin(),
                           m_filteredEntries.end(),
-                          [=](CLogEntry& entry)
+                          [=](IData* entry)
                           {
-                            if (m_Classes.find(entry.Class()) == m_Classes.end())
-                                m_Classes.insert(std::make_pair(entry.Class(), (entry.IsClassFiltered() == false)));
+                              CLogEntry* lpEntry = reinterpret_cast<CLogEntry*> (entry);
+                              if (lpEntry != nullptr)
+                              {
+                                  if (m_Classes.find(lpEntry->Class()) == m_Classes.end())
+                                      m_Classes.insert(std::make_pair(lpEntry->Class(), (lpEntry->IsClassFiltered() == false)));
+                              }
             });
 
             if (m_filteredEntries.size() < m_logEntries.size())
             {
                 timer.SetTime("add m_logEntries classes");
-                std::for_each(m_logEntries.begin(),
-                              m_logEntries.end(),
-                              [=](CLogEntry &entry)
-                              {
-                                if (m_Classes.find(entry.Class()) == m_Classes.end())
-                                        m_Classes.insert(std::make_pair(entry.Class(), false));
-                });
+                std::for_each(  m_logEntries.begin(),
+                                m_logEntries.end(),
+                                [=](IData* entry)
+                                {
+                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*> (entry);
+                                    if (lpEntry != nullptr)
+                                    {
+                                        if (m_Classes.find(lpEntry->Class()) == m_Classes.end())
+                                            m_Classes.insert(std::make_pair(lpEntry->Class(), false));
+                                    }
+                                });
             }
             timer.SetTime("End");
         }
@@ -378,16 +310,28 @@ std::map<std::string, bool> CLogFile::GetTracelevels(void)
     {
         if (m_TraceLevels.size() == 0)
         {
-
-            std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                if (m_TraceLevels.find(entry.Level()) == m_TraceLevels.end())
-                    m_TraceLevels.insert(std::make_pair(entry.Level(), true));
-            });
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(m_filteredEntries.begin(),
+                          m_filteredEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_TraceLevels.find(lpEntry->Level()) == m_TraceLevels.end())
+                                    m_TraceLevels.insert(std::make_pair(lpEntry->Level(), true));
+                            }
+                        });
             // Mark the tracelevels false if they do not occurs in the filter list
-            std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-                if (m_TraceLevels.find(entry.Level()) == m_TraceLevels.end())
-                    m_TraceLevels.insert(std::make_pair(entry.Level(), false));
-            });
+            std::for_each(m_logEntries.begin(),
+                          m_logEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_TraceLevels.find(lpEntry->Level()) == m_TraceLevels.end())
+                                    m_TraceLevels.insert(std::make_pair(lpEntry->Level(), false));
+                            }
+                        });
         }
     }
     catch(std::exception& ex)
@@ -408,15 +352,28 @@ std::map<std::string, bool> CLogFile::GetPIDs(void)
     {
         if (m_PIDs.size() == 0)
         {
-            std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                if (m_PIDs.find(entry.ProcID()) == m_PIDs.end())
-                    m_PIDs.insert(std::make_pair(entry.ProcID(), true));
-            });
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(m_filteredEntries.begin(),
+                          m_filteredEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_PIDs.find(lpEntry->ProcID()) == m_PIDs.end())
+                                        m_PIDs.insert(std::make_pair(lpEntry->ProcID(), true));
+                            }
+                        });
             // Mark the tracelevels false if they do not occurs in the filter list
-            std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-                if (m_PIDs.find(entry.ProcID()) == m_PIDs.end())
-                    m_PIDs.insert(std::make_pair(entry.ProcID(), false));
-            });
+            std::for_each(m_logEntries.begin(),
+                          m_logEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_PIDs.find(lpEntry->ProcID()) == m_PIDs.end())
+                                    m_PIDs.insert(std::make_pair(lpEntry->ProcID(), false));
+                            }
+                        });
         }
     }
     catch(std::exception& ex)
@@ -436,15 +393,28 @@ std::map<std::string, bool> CLogFile::GetTIDs(void)
     {
         if (m_TIDs.size() == 0)
         {
-            std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                if (m_TIDs.find(entry.ThreadID()) == m_TIDs.end())
-                    m_TIDs.insert(std::make_pair(entry.ThreadID(), true));
-            });
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(m_filteredEntries.begin(),
+                          m_filteredEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_TIDs.find(lpEntry->ThreadID()) == m_TIDs.end())
+                                    m_TIDs.insert(std::make_pair(lpEntry->ThreadID(), true));
+                            }
+                        });
             // Mark the tracelevels false if they do not occurs in the filter list
-            std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-                if (m_TIDs.find(entry.ThreadID()) == m_TIDs.end())
-                    m_TIDs.insert(std::make_pair(entry.ThreadID(), false));
-            });
+            std::for_each(m_logEntries.begin(),
+                          m_logEntries.end(),
+                          [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_TIDs.find(lpEntry->ThreadID()) == m_TIDs.end())
+                                    m_TIDs.insert(std::make_pair(lpEntry->ThreadID(), false));
+                            }
+                        });
         }
 
     }
@@ -474,10 +444,18 @@ void CLogFile::SetTimeFilter(std::string startTime, std::string endTime)
 
         int prevSize = m_filteredEntries.size();
 
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(), [=, &uiStartTime, &uiEndTime](CLogEntry& entry){
-                                    return (  (entry.GetTime() < uiStartTime)
-                                            ||(entry.GetTime() > uiEndTime));
-                               }), m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
+                                               m_filteredEntries.end(),
+                                               [=, &uiStartTime, &uiEndTime](IData* entry){
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    bool bReturn = false;
+                                                    if (lpEntry != nullptr)
+                                                    {
+                                                        bReturn = (   (lpEntry->GetTime() < uiStartTime)
+                                                                    ||(lpEntry->GetTime() > uiEndTime));
+                                                    }
+                                                    return bReturn;
+                                                }), m_filteredEntries.end());
 
         trace.Trace("Number of entries removed: %ld, total entries: %ld"
                     , (prevSize - m_filteredEntries.size())
@@ -508,13 +486,19 @@ void CLogFile::SetDescriptionFilter(std::vector<std::string> TextFilters, bool c
                 s = " " + s + " ";
             filter.push_back(s);
         }
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(),[=, &caseSensitive](CLogEntry& entry){
-                                    std::string sDesc = entry.Description();
-                                    if (caseSensitive == false)
-                                        transform(sDesc.begin(), sDesc.end(), sDesc.begin(), ::tolower);
-
-                                    return !InverseContains<std::vector<std::string>>(filter, sDesc);
-                                }), m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
+                                               m_filteredEntries.end(),
+                                               [=, &caseSensitive](IData* entry){
+                                                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                if (lpEntry != nullptr)
+                                                {
+                                                    std::string sDesc = lpEntry->Description();
+                                                    if (caseSensitive == false)
+                                                        transform(sDesc.begin(), sDesc.end(), sDesc.begin(), ::tolower);
+                                                    return !InverseContains<std::vector<std::string>>(filter, sDesc);
+                                                }
+                                                return false;
+                                            }), m_filteredEntries.end());
     }
     catch(std::exception& ex)
     {
@@ -541,13 +525,20 @@ void CLogFile::SetInverseDescriptionFilter(std::vector<std::string> TextFilters,
                 s = " " + s + " ";
             filter.push_back(s);
         }
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(),[=, &caseSensitive](CLogEntry& entry){
-                                    std::string sDesc = entry.Description();
-                                    if (caseSensitive == false)
-                                        transform(sDesc.begin(), sDesc.end(), sDesc.begin(), ::tolower);
+        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
+                                               m_filteredEntries.end(),
+                                               [=, &caseSensitive](IData* entry){
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    if (lpEntry != nullptr)
+                                                    {
+                                                        std::string sDesc = lpEntry->Description();
+                                                        if (caseSensitive == false)
+                                                            transform(sDesc.begin(), sDesc.end(), sDesc.begin(), ::tolower);
 
-                                    return InverseContains<std::vector<std::string>>(filter, sDesc);
-                                }), m_filteredEntries.end());
+                                                        return InverseContains<std::vector<std::string>>(filter, sDesc);
+                                                    }
+                                                    return false;
+                                                }), m_filteredEntries.end());
 
     }
     catch(std::exception& ex)
@@ -566,12 +557,17 @@ void CLogFile::SetLevelFilter()
     try
     {
         int prevSize = m_filteredEntries.size();
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
-                                               m_filteredEntries.end(),
-                                               [=](CLogEntry &entry) {
-                                                   return entry.IsLevelFiltered();
-                                               }),
-                                m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if( m_filteredEntries.begin(),
+                                                m_filteredEntries.end(),
+                                                [=](IData* entry) {
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    if (lpEntry != nullptr)
+                                                    {
+                                                       return lpEntry->IsLevelFiltered();
+                                                    }
+                                                    return false;
+                                                }),
+                                                m_filteredEntries.end());
         trace.Trace("Number of entries removed: %ld, total entries: %ld"
                     , (prevSize - m_filteredEntries.size())
                     , m_filteredEntries.size());
@@ -593,12 +589,17 @@ void CLogFile::SetThreadIdFilter(void)
     try
     {
         int prevSize = m_filteredEntries.size();
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
-                                               m_filteredEntries.end(),
-                                               [=](CLogEntry &entry) {
-                                                   return entry.IsTIDFiltered();
-                                               }),
-                                m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if( m_filteredEntries.begin(),
+                                                m_filteredEntries.end(),
+                                                [=](IData* entry) {
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    if (lpEntry != nullptr)
+                                                    {
+                                                        return lpEntry->IsTIDFiltered();
+                                                    }
+                                                    return false;
+                                                }),
+                                                m_filteredEntries.end());
         trace.Trace("Number of entries removed: %ld, total entries: %ld"
                     , (prevSize - m_filteredEntries.size())
                     , m_filteredEntries.size());
@@ -619,12 +620,15 @@ void CLogFile::SetProcIdFilter(void)
     try
     {
         int prevSize = m_filteredEntries.size();
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(),
-                                               m_filteredEntries.end(),
-                                               [=](CLogEntry &entry) {
-                                                   return entry.IsPIDFiltered();
-                                               }),
-                                m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if( m_filteredEntries.begin(),
+                                                m_filteredEntries.end(),
+                                                [=](IData* entry) {
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    if (lpEntry != nullptr)
+                                                        return lpEntry->IsPIDFiltered();
+                                                    return false;
+                                                }),
+                                                m_filteredEntries.end());
         trace.Trace("Number of entries removed: %ld, total entries: %ld"
                     , (prevSize - m_filteredEntries.size())
                     , m_filteredEntries.size());
@@ -644,9 +648,14 @@ void CLogFile::SetClassNameFilter(void)
     CFuncTracer trace("CLogFile::SetClassNameFilter", m_trace);
     try
     {
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                                    return entry.IsClassFiltered();
-                                }), m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if( m_filteredEntries.begin(),
+                                                m_filteredEntries.end(),
+                                                [=](IData* entry){
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    if (lpEntry != nullptr)
+                                                        return lpEntry->IsClassFiltered();
+                                                    return false;
+                                                }), m_filteredEntries.end());
     }
     catch(std::exception& ex)
     {
@@ -663,9 +672,14 @@ void CLogFile::SetFunctionFilter(void)
     CFuncTracer trace("CLogFile::SetFunctionFilter", m_trace);
     try
     {
-        m_filteredEntries.erase(std::remove_if(m_filteredEntries.begin(), m_filteredEntries.end(), [=](CLogEntry& entry){
-                                    return entry.IsFunctionFiltered();
-                                }), m_filteredEntries.end());
+        m_filteredEntries.erase(std::remove_if( m_filteredEntries.begin(),
+                                                m_filteredEntries.end(),
+                                                [=](IData* entry){
+                                                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                                    if (lpEntry != nullptr)
+                                                        return lpEntry->IsFunctionFiltered();
+                                                    return false;
+                                                }), m_filteredEntries.end());
     }
     catch(std::exception& ex)
     {
@@ -683,6 +697,7 @@ void CLogFile::ClearFilter(void)
     CFuncTracer trace("CLogFile::ClearFilter", m_trace);
     try
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         m_filteredEntries.clear();
         std::copy(m_logEntries.begin(), m_logEntries.end(),
                   std::back_inserter(m_filteredEntries));
@@ -776,16 +791,22 @@ void CLogFile::UpdateClassFunctions(bool bFiltered, const std::string& classname
         }
 
         // Update the filtered entries (IsFunctionFiltered, IsClassFiltered)
-        std::for_each(m_logEntries.begin(),
-                      m_logEntries.end(),
-                      [=, &bFiltered, &classname, &iCountClass](CLogEntry &entry) {
-                          if (entry.Class().find(classname) != std::string::npos) {
-                              entry.FilterClass(bFiltered);
-                              entry.FilterFunction(bFiltered);
-                              iCountClass++;
-                          }
-                      });
-
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(  m_logEntries.begin(),
+                            m_logEntries.end(),
+                            [=, &bFiltered, &classname, &iCountClass](IData* entry) {
+                                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                if (lpEntry != nullptr)
+                                {
+                                    if (lpEntry->Class().find(classname) != std::string::npos) {
+                                        lpEntry->FilterClass(bFiltered);
+                                        lpEntry->FilterFunction(bFiltered);
+                                        iCountClass++;
+                                    }
+                                }
+                            });
+        }
         trace.Trace("iCountFunctions : %ld, iCountClass : %ld", iCountFunctions, iCountClass);
     }
     catch (std::exception &ex)
@@ -812,15 +833,22 @@ void CLogFile::UpdateFunctionName(bool bFiltered, const std::string& fullFunctio
             m_Functions[fullFunctionName] = (bFiltered == false);
 
         // Update the filtered entries (IsFunctionFiltered)
-        std::for_each(m_logEntries.begin(),
-                      m_logEntries.end(),
-                      [=, &bFiltered, &fullFunctionName, &iCount](CLogEntry &entry) {
-                          if ((fullFunctionName.find(entry.Class()) != std::string::npos)
-                              && (fullFunctionName.find(entry.FuncName()) != std::string::npos)) {
-                              entry.FilterFunction(bFiltered);
-                              iCount++;
-                          }
-                      });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(  m_logEntries.begin(),
+                          m_logEntries.end(),
+                          [=, &bFiltered, &fullFunctionName, &iCount](IData* entry) {
+                              CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                              if (lpEntry != nullptr)
+                              {
+                                  if ((fullFunctionName.find(lpEntry->Class()) != std::string::npos)
+                                      && (fullFunctionName.find(lpEntry->FuncName()) != std::string::npos)) {
+                                      lpEntry->FilterFunction(bFiltered);
+                                      iCount++;
+                                  }
+                              }
+                          });
+        }
         trace.Trace("iCount : %ld", iCount);
     }
     catch (std::exception &ex)
@@ -847,14 +875,21 @@ void CLogFile::UpdateLevel(bool bFiltered, const std::string& sLevel)
             m_TraceLevels[sLevel] = (bFiltered == false);
 
         // Update the filtered entries (IsLevelFiltered)
-        std::for_each(m_logEntries.begin(),
-                      m_logEntries.end(),
-                      [=, &bFiltered, &sLevel, &iCount](CLogEntry& entry) {
-                          if (entry.Level().find(sLevel) != std::string::npos) {
-                              entry.FilterLevel(bFiltered);
-                              iCount++;
-                          }
-                      });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(  m_logEntries.begin(),
+                          m_logEntries.end(),
+                          [=, &bFiltered, &sLevel, &iCount](IData* entry) {
+                              CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                              if (lpEntry != nullptr)
+                              {
+                                  if (lpEntry->Level().find(sLevel) != std::string::npos) {
+                                      lpEntry->FilterLevel(bFiltered);
+                                      iCount++;
+                                  }
+                              }
+                          });
+        }
         trace.Trace("iCount : %ld", iCount);
     }
     catch (std::exception &ex)
@@ -880,14 +915,21 @@ void CLogFile::UpdatePID(bool bFiltered, const std::string& sPid)
             m_PIDs[sPid] = (bFiltered == false);
 
         // Update the filtered entries (IsLevelFiltered)
-        std::for_each(m_logEntries.begin(),
-                      m_logEntries.end(),
-                      [=, &bFiltered, &sPid, &iCount](CLogEntry& entry) {
-                          if (entry.ProcID().find(sPid) != std::string::npos) {
-                              entry.FilterPID(bFiltered);
-                              iCount++;
-                          }
+        {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        std::for_each(  m_logEntries.begin(),
+                        m_logEntries.end(),
+                        [=, &bFiltered, &sPid, &iCount](IData* entry) {
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (lpEntry->ProcID().find(sPid) != std::string::npos) {
+                                    lpEntry->FilterPID(bFiltered);
+                                    iCount++;
+                                }
+                            }
                       });
+        }
         trace.Trace("iCount : %ld", iCount);
 
     }
@@ -914,14 +956,21 @@ void CLogFile::UpdateTID(bool bFiltered, const std::string& sTid)
             m_TIDs[sTid] = (bFiltered == false);
 
         // Update the filtered entries (IsLevelFiltered)
-        std::for_each(m_logEntries.begin(),
-                      m_logEntries.end(),
-                      [=, &bFiltered, &sTid, &iCount](CLogEntry& entry) {
-                          if (entry.ThreadID().find(sTid) != std::string::npos) {
-                              entry.FilterTID(bFiltered);
-                              iCount++;
-                          }
-                      });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(  m_logEntries.begin(),
+                            m_logEntries.end(),
+                            [=, &bFiltered, &sTid, &iCount](IData* entry) {
+                                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                if (lpEntry != nullptr)
+                                {
+                                    if (lpEntry->ThreadID().find(sTid) != std::string::npos) {
+                                        lpEntry->FilterTID(bFiltered);
+                                        iCount++;
+                                    }
+                                }
+                          });
+        }
         trace.Trace("iCount : %ld", iCount);
     }
     catch(std::exception& ex)
@@ -933,28 +982,33 @@ void CLogFile::UpdateTID(bool bFiltered, const std::string& sTid)
         trace.Error("Exception occurred");
     }
 }
-
 bool CLogFile::Save(const char *filename)
 {
     CFuncTracer trace("CLogFile::Save", m_trace);
     try
     {
         std::ofstream file(filename, std::fstream::out|std::fstream::trunc );
-        std::for_each(m_filteredEntries.begin(), m_filteredEntries.end(), [=, &file](CLogEntry& entry){
-            if (IsTimeAvailable())
-                file << entry.Time() << " ";
-            if (IsLevelAvailable())
-                 file << entry.Level() << "\t";
-            if (IsProcIdAvailable() || IsThreadIdAvailable())
-                 file << "[" << std::to_string(entry.GetProcId()) << ":" << std::to_string(entry.GetThreadId()) << "]";
-            file << "  -  ";
-            if (IsFuncNameAvailable())
-                 file << entry.Class() << "::" << entry.FuncName();
-            file << " : ";
-            if (IsDescriptionAvailable())
-                file << entry.Description();
-            file << std::endl;
-        });
+        std::for_each(  m_filteredEntries.begin(),
+                        m_filteredEntries.end(),
+                        [=, &file](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (IsTimeAvailable())
+                                    file << lpEntry->Time() << " ";
+                                if (IsLevelAvailable())
+                                    file << lpEntry->Level() << "\t";
+                                if (IsProcIdAvailable() || IsThreadIdAvailable())
+                                    file << "[" << std::to_string(lpEntry->GetProcId()) << ":" << std::to_string(lpEntry->GetThreadId()) << "]";
+                                file << "  -  ";
+                                if (IsFuncNameAvailable())
+                                    file << lpEntry->Class() << "::" << lpEntry->FuncName();
+                                file << " : ";
+                                if (IsDescriptionAvailable())
+                                    file << lpEntry->Description();
+                                file << std::endl;
+                            }
+                        });
         file.flush();
         file.close();
     }
@@ -968,6 +1022,23 @@ bool CLogFile::Save(const char *filename)
     }
     return false;
 }
+void CLogFile::RegisterParsedData(std::function<void (std::vector<IData*> items)> event)
+{
+    CFuncTracer trace("CLogFile::RegisterParsedData", m_trace);
+    try
+    {
+        m_onParsedData = event;
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred: %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+
 std::map<std::string, int> CLogFile::GetClassOccurences()
 {
     CFuncTracer trace("CLogFile::GetClassOccurences", m_trace);
@@ -976,12 +1047,21 @@ std::map<std::string, int> CLogFile::GetClassOccurences()
         if (m_ClassOccurences.size() > 0)
             return m_ClassOccurences;
 
-        for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-            if (m_ClassOccurences.find(entry.Class()) == m_ClassOccurences.end())
-                m_ClassOccurences.insert(std::make_pair(entry.Class(), 1));
-            else
-                m_ClassOccurences[entry.Class()] += 1;
-        });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            for_each(   m_logEntries.begin(),
+                        m_logEntries.end(),
+                        [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                if (m_ClassOccurences.find(lpEntry->Class()) == m_ClassOccurences.end())
+                                    m_ClassOccurences.insert(std::make_pair(lpEntry->Class(), 1));
+                                else
+                                    m_ClassOccurences[lpEntry->Class()] += 1;
+                            }
+                        });
+        }
     }
     catch(std::exception& ex)
     {
@@ -1001,13 +1081,22 @@ std::map<std::string, int> CLogFile::GetFunctionOccurences()
         if (m_FunctionOccurences.size() > 0)
             return m_FunctionOccurences;
 
-        for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-            std::string fullFunction = entry.Class() + "::" + entry.FuncName();
-            if (m_FunctionOccurences.find(fullFunction) == m_FunctionOccurences.end())
-                m_FunctionOccurences.insert(std::make_pair(fullFunction, 1));
-            else
-                m_FunctionOccurences[fullFunction] += 1;
-        });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            for_each(   m_logEntries.begin(),
+                        m_logEntries.end(),
+                        [=](IData* entry){
+                            CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                            if (lpEntry != nullptr)
+                            {
+                                std::string fullFunction = lpEntry->Class() + "::" + lpEntry->FuncName();
+                                if (m_FunctionOccurences.find(fullFunction) == m_FunctionOccurences.end())
+                                    m_FunctionOccurences.insert(std::make_pair(fullFunction, 1));
+                                else
+                                    m_FunctionOccurences[fullFunction] += 1;
+                            }
+                        });
+        }
     }
     catch(std::exception& ex)
     {
@@ -1027,16 +1116,25 @@ std::map<std::string, int> CLogFile::GetFunctionEntries()
         if (m_FunctionEntries.size() > 0)
             return m_FunctionEntries;
 
-        std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-            if (entry.Description().find("Entr") != std::string::npos)
-            {
-                std::string fullFunction = entry.Class() + "::" + entry.FuncName();
-                if (m_FunctionEntries.find(fullFunction) == m_FunctionEntries.end())
-                    m_FunctionEntries.insert(std::make_pair(fullFunction, 1));
-                else
-                    m_FunctionEntries[fullFunction] += 1;
-            }
-        });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(  m_logEntries.begin(),
+                            m_logEntries.end(),
+                            [=](IData* entry){
+                                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                if (lpEntry != nullptr)
+                                {
+                                    if (lpEntry->Description().find("Entr") != std::string::npos)
+                                    {
+                                        std::string fullFunction = lpEntry->Class() + "::" + lpEntry->FuncName();
+                                        if (m_FunctionEntries.find(fullFunction) == m_FunctionEntries.end())
+                                            m_FunctionEntries.insert(std::make_pair(fullFunction, 1));
+                                        else
+                                            m_FunctionEntries[fullFunction] += 1;
+                                    }
+                                }
+                            });
+        }
     }
     catch(std::exception& ex)
     {
@@ -1056,16 +1154,25 @@ std::map<std::string, int> CLogFile::GetFunctionExits()
         if (m_FunctionExits.size() > 0)
             return m_FunctionExits;
 
-        std::for_each(m_logEntries.begin(), m_logEntries.end(), [=](CLogEntry& entry){
-            if (entry.Description().find("Exit") != std::string::npos)
-            {
-                std::string fullFunction = entry.Class() + "::" + entry.FuncName();
-                if (m_FunctionExits.find(fullFunction) == m_FunctionExits.end())
-                    m_FunctionExits.insert(std::make_pair(fullFunction, 1));
-                else
-                    m_FunctionExits[fullFunction] += 1;
-            }
-        });
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::for_each(  m_logEntries.begin(),
+                            m_logEntries.end(),
+                            [=](IData* entry){
+                                CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                if (lpEntry != nullptr)
+                                {
+                                    if (lpEntry->Description().find("Exit") != std::string::npos)
+                                    {
+                                        std::string fullFunction = lpEntry->Class() + "::" + lpEntry->FuncName();
+                                        if (m_FunctionExits.find(fullFunction) == m_FunctionExits.end())
+                                            m_FunctionExits.insert(std::make_pair(fullFunction, 1));
+                                        else
+                                            m_FunctionExits[fullFunction] += 1;
+                                    }
+                                }
+                            });
+        }
     }
     catch(std::exception& ex)
     {
@@ -1082,16 +1189,23 @@ void CLogFile::SetMark(long long id, bool bMark)
     CFuncTracer trace("CLogFile::SetMark", m_trace, false);
     try
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         trace.Info("id : %ld, bMark : %s", id, (bMark == true)?"TRUE" : "FALSE");
-        int count = std::count_if(m_logEntries.begin(), m_logEntries.end(), [=, &id, &bMark](CLogEntry& entry){
-            if (  (entry.GetID() == id)
-                ||(id < 0))
-            {
-                entry.SetMark(bMark);
-                return true;
-            }
-            return false;
-        });
+        int count = std::count_if(  m_logEntries.begin(),
+                                    m_logEntries.end(),
+                                    [=, &id, &bMark](IData* entry){
+                                        CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                        if (lpEntry != nullptr)
+                                        {
+                                            if (  (lpEntry->GetID() == id)
+                                                ||(id < 0))
+                                            {
+                                                lpEntry->SetMark(bMark);
+                                                return true;
+                                            }
+                                        }
+                                        return false;
+                                    });
         trace.Trace("#%ld Marks changed in m_logEntries", count);
     }
     catch(std::exception& ex)
@@ -1108,15 +1222,21 @@ void CLogFile::SetRequiredText(long long id, const std::string& text, bool bRequ
     CFuncTracer trace("CLogFile::setRequiredText", m_trace);
     try
     {
-        int count = std::count_if(m_logEntries.begin(), m_logEntries.end(), [=, &id, &text, &bRequired](CLogEntry& entry){
-            if (  (entry.GetID() == id)
-                ||(id < 0))
-            {
-                entry.SetSearchMark(bRequired, text);
-                return true;
-            }
-            return false;
-        });
+        int count = std::count_if(  m_logEntries.begin(),
+                                    m_logEntries.end(),
+                                    [=, &id, &text, &bRequired](IData* entry){
+                                        CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(entry);
+                                        if (lpEntry != nullptr)
+                                        {
+                                            if (  (lpEntry->GetID() == id)
+                                                ||(id < 0))
+                                            {
+                                                lpEntry->SetSearchMark(bRequired, text);
+                                                return true;
+                                            }
+                                        }
+                                        return false;
+                                    });
         trace.Trace("#%ld required text (%s)", count, text.c_str());
     }
     catch(std::exception& ex)
@@ -1470,12 +1590,18 @@ void CLogFile::parse_MP(void)
 
             if (isTraceLevelValid(m_sLevel.c_str()))
             {
+                std::lock_guard<std::recursive_mutex> lock(m_mutex);
                 timer.SetTime("12");
                 m_bDetectedFormat = true;
-                CLogEntry entry(m_trace, m_sTime.c_str(), m_sLevel.c_str(), m_sProcId.c_str(),
-                                m_sThreadId.c_str(), m_sClassname.c_str(), m_sFuncName.c_str(), m_sDescription.c_str());
                 timer.SetTime("12b");
-                m_logEntries.emplace_back(entry);
+                m_logEntries.push_back(new CLogEntry(m_trace,
+                                                 m_sTime.c_str(),
+                                                 m_sLevel.c_str(),
+                                                 m_sProcId.c_str(),
+                                                 m_sThreadId.c_str(),
+                                                 m_sClassname.c_str(),
+                                                 m_sFuncName.c_str(),
+                                                 m_sDescription.c_str()));
                 timer.SetTime("13");
             }
             else
@@ -1483,24 +1609,56 @@ void CLogFile::parse_MP(void)
                 if (! m_bDetectedFormat)
                     continue;
 
+                std::lock_guard<std::recursive_mutex> lock(m_mutex);
                 if (m_logEntries.size() > 0)
                 {
                     timer.SetTime("14");
-                    CLogEntry entry(m_trace,
-                              m_logEntries[m_logEntries.size() - 1].Time().c_str(),
-                              m_logEntries[m_logEntries.size() - 1].Level().c_str(),
-                              m_logEntries[m_logEntries.size() - 1].ProcID().c_str(),
-                              m_logEntries[m_logEntries.size() - 1].ThreadID().c_str(),
-                              m_logEntries[m_logEntries.size() - 1].Class().c_str(),
-                              m_logEntries[m_logEntries.size() - 1].FuncName().c_str(),
-                                    m_sLine.c_str());
-                    timer.SetTime("14b");
-                    m_logEntries.emplace_back(entry);
-                    timer.SetTime("15");
+                    IData *dat = m_logEntries[m_logEntries.size() - 1];
+                    CLogEntry *lpEntry = reinterpret_cast<CLogEntry *>(dat);
+                    if (lpEntry != nullptr)
+                    {
+                        std::string sTime = lpEntry->Time();
+
+                        timer.SetTime("14b");
+                        m_logEntries.push_back(new CLogEntry(m_trace,
+                                                               lpEntry->Time().c_str(),
+                                                               lpEntry->Level().c_str(),
+                                                               lpEntry->ProcID().c_str(),
+                                                               lpEntry->ThreadID().c_str(),
+                                                               lpEntry->Class().c_str(),
+                                                               lpEntry->FuncName().c_str(),
+                                                               m_sLine.c_str()));
+                        timer.SetTime("15");
+                    }
+                    else
+                        trace.Error("lpEntry is not of type CLogEntry");
+                }
+            }
+            if (  ((m_logEntries.size() % m_parsedItemsBuffer) == 0)
+                &&(m_logEntries.size() > 0))
+            {
+                if (m_onParsedData != nullptr)
+                {
+                    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+                    std::vector<IData *> parsedData(m_logEntries.begin() + m_CurrentParsedDataIndex,
+                                                    m_logEntries.begin() + m_CurrentParsedDataIndex + m_parsedItemsBuffer);
+                    m_onParsedData(parsedData);
+                    m_CurrentParsedDataIndex += m_parsedItemsBuffer;
                 }
             }
             timer.SetTime("16");
         }
+
+        if (  (m_logEntries.size() > 0)
+            &&(m_logEntries.size() > m_CurrentParsedDataIndex))
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            std::vector<IData *> parsedData(m_logEntries.begin() + m_CurrentParsedDataIndex,
+                                            m_logEntries.end());
+            m_onParsedData(parsedData);
+            m_CurrentParsedDataIndex = m_logEntries.size();
+        }
+
         file.unmap(memory);
         file.close();
 
@@ -1695,9 +1853,11 @@ void CLogFile::parse(void)
 
             if (isTraceLevelValid(m_sLevel.c_str()))
             {
+                std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
                 timer.SetTime("12");
                 m_bDetectedFormat = true;
-                m_logEntries.push_back(CLogEntry(m_trace, m_sTime.c_str(), m_sLevel.c_str(), m_sProcId.c_str(),
+                m_logEntries.push_back(new CLogEntry(m_trace, m_sTime.c_str(), m_sLevel.c_str(), m_sProcId.c_str(),
                                                  m_sThreadId.c_str(), m_sClassname.c_str(), m_sFuncName.c_str(), m_sDescription.c_str()));
                 timer.SetTime("13");
             }
@@ -1709,18 +1869,23 @@ void CLogFile::parse(void)
                     continue;
                 }
 
+                std::lock_guard<std::recursive_mutex> lock(m_mutex);
                 if (m_logEntries.size() > 0)
                 {
+                    CLogEntry* lpEntry = reinterpret_cast<CLogEntry*>(m_logEntries[m_logEntries.size() - 1]);
+                    if (lpEntry != nullptr)
+                    {
                     timer.SetTime("14");
-                    m_logEntries.push_back(CLogEntry(m_trace,
-                                                     m_logEntries[m_logEntries.size() - 1].Time().c_str(),
-                                                     m_logEntries[m_logEntries.size() - 1].Level().c_str(),
-                                                     m_logEntries[m_logEntries.size() - 1].ProcID().c_str(),
-                                                     m_logEntries[m_logEntries.size() - 1].ThreadID().c_str(),
-                                                     m_logEntries[m_logEntries.size() - 1].Class().c_str(),
-                                                     m_logEntries[m_logEntries.size() - 1].FuncName().c_str(),
-                                                     m_sLine.c_str()));
-                    timer.SetTime("15");
+                        m_logEntries.push_back(new CLogEntry(m_trace,
+                                                         lpEntry->Time().c_str(),
+                                                         lpEntry->Level().c_str(),
+                                                         lpEntry->ProcID().c_str(),
+                                                         lpEntry->ThreadID().c_str(),
+                                                         lpEntry->Class().c_str(),
+                                                         lpEntry->FuncName().c_str(),
+                                                         m_sLine.c_str()));
+                        timer.SetTime("15");
+                    }
                 }
             }
             timer.SetTime("16");
@@ -1830,3 +1995,51 @@ int CLogFile::getNrOfLines(const std::string& file)
     }
     return ilines;
 }
+
+
+ParseFileTask::ParseFileTask(std::shared_ptr<CTracer> tracer, std::string filename, int trunkDataSize, QObject* parent)
+    : QRunnable()
+    , QObject(parent)
+    , m_trace(tracer)
+    , m_onParsedData(nullptr)
+    , m_onParsedFinished(nullptr)
+{
+    CFuncTracer trace("ParseFileTask::ParseFileTask", m_trace);
+    try
+    {
+        m_file = std::make_unique<CLogFile>(filename.c_str(), tracer, false);
+        m_file->RegisterParsedData([=](std::vector<IData*> items)->void{
+            if (m_onParsedData)
+                m_onParsedData(items);
+            m_itemsParsed+= items.size();
+        });
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+
+void ParseFileTask::run()
+{
+    CFuncTracer trace("ParseFileTask::run", m_trace);
+    try
+    {
+        m_file->parse_MP();
+        if (m_onParsedFinished)
+            m_onParsedFinished(m_itemsParsed);
+    }
+    catch(std::exception& ex)
+    {
+        trace.Error("Exception occurred : %s", ex.what());
+    }
+    catch(...)
+    {
+        trace.Error("Exception occurred");
+    }
+}
+
