@@ -9,7 +9,6 @@
 #define MEASURE_FUNCTION(tracer) ScopeTimer(__func__, tracer)
 #define CFUNCTRACER(tracer) CFuncTrace trace(__func__, tracer)
 #define CFUNCTRACER_SEPARATOR   ((char *)"() : ")
-#define TRACER_MAX_BUFFER_SIZE          1024
 
 class CFuncTracer
 {
