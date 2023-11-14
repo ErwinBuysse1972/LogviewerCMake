@@ -18,10 +18,11 @@ void CFuncTracer::Trace(const char* fmt, ...)
         if (_tracer == nullptr)
             return;
 
-        buffer = make_unique<char[]>(TRACER_MAX_BUFFER_SIZE + 1);
-        memset(buffer.get(), 0x00, TRACER_MAX_BUFFER_SIZE + 1);
         va_start(arg_ptr, fmt);
-        vsnprintf(buffer.get(), TRACER_MAX_BUFFER_SIZE, fmt, arg_ptr);
+        int size = _vscprintf(fmt, arg_ptr) + 1; // Nullpointer is not added into vscprintf.
+        buffer = std::make_unique<char[]>(size);
+        buffer[(size - 1)] = 0;
+        vsnprintf(buffer.get(), size, fmt, arg_ptr);
         va_end(arg_ptr);
 
         trace(buffer.get());
@@ -38,10 +39,11 @@ void CFuncTracer::Info(const char* fmt, ...)
         if (_tracer == nullptr)
             return;
 
-        unique_ptr<char[]> buffer = make_unique<char[]>(TRACER_MAX_BUFFER_SIZE + 1);
-        memset(buffer.get(), 0x00, TRACER_MAX_BUFFER_SIZE + 1);
         va_start(arg_ptr, fmt);
-        vsnprintf(buffer.get(), TRACER_MAX_BUFFER_SIZE, fmt, arg_ptr);
+        int size = _vscprintf(fmt, arg_ptr) + 1; // Nullpointer is not added into vscprintf.
+        unique_ptr<char[]>buffer = std::make_unique<char[]>(size);
+        buffer[(size - 1)] = 0;
+        vsnprintf(buffer.get(), size, fmt, arg_ptr);
         va_end(arg_ptr);
         info(buffer.get());
     }
@@ -52,17 +54,17 @@ void CFuncTracer::Info(const char* fmt, ...)
 void CFuncTracer::Warning(const char* fmt, ...)
 {
     va_list arg_ptr;
-    std::unique_ptr<char[]> buffer;
 
     try
     {
         if (_tracer == nullptr)
             return;
 
-        buffer = std::make_unique<char[]>(TRACER_MAX_BUFFER_SIZE + 1);
-        memset(buffer.get(), 0x00, TRACER_MAX_BUFFER_SIZE + 1);
         va_start(arg_ptr, fmt);
-        vsnprintf(buffer.get(), TRACER_MAX_BUFFER_SIZE, fmt, arg_ptr);
+        int size = _vscprintf(fmt, arg_ptr) + 1; // Nullpointer is not added into vscprintf.
+        std::unique_ptr<char[]>buffer = std::make_unique<char[]>(size);
+        buffer[(size - 1)] = 0;
+        vsnprintf(buffer.get(), size, fmt, arg_ptr);
         va_end(arg_ptr);
 
         warning(buffer.get());
@@ -75,17 +77,16 @@ void CFuncTracer::Warning(const char* fmt, ...)
 void CFuncTracer::Error(const char* fmt, ...)
 {
     va_list arg_ptr;
-    std::unique_ptr<char[]> buffer;
-
     try
     {
         if (_tracer == nullptr)
             return;
 
-        buffer = std::make_unique<char[]>(TRACER_MAX_BUFFER_SIZE + 1);
-        memset(buffer.get(), 0x00, TRACER_MAX_BUFFER_SIZE + 1);
         va_start(arg_ptr, fmt);
-        vsnprintf(buffer.get(), TRACER_MAX_BUFFER_SIZE, fmt, arg_ptr);
+        int size = _vscprintf(fmt, arg_ptr) + 1; // Nullpointer is not added into vscprintf.
+        std::unique_ptr<char[]>buffer = std::make_unique<char[]>(size);
+        buffer[(size - 1)] = 0;
+        vsnprintf(buffer.get(), size, fmt, arg_ptr);
         va_end(arg_ptr);
 
         error( buffer.get());
@@ -98,17 +99,17 @@ void CFuncTracer::Error(const char* fmt, ...)
 void CFuncTracer::FatalError(const char* fmt, ...)
 {
     va_list arg_ptr;
-    std::unique_ptr<char[]> buffer;
 
     try
     {
         if (_tracer == nullptr)
             return;
 
-        buffer = std::make_unique<char[]>(TRACER_MAX_BUFFER_SIZE + 1);
-        memset(buffer.get(), 0x00, TRACER_MAX_BUFFER_SIZE + 1);
         va_start(arg_ptr, fmt);
-        vsnprintf(buffer.get(), TRACER_MAX_BUFFER_SIZE, fmt, arg_ptr);
+        int size = _vscprintf(fmt, arg_ptr) + 1; // Nullpointer is not added into vscprintf.
+        std::unique_ptr<char[]>buffer = std::make_unique<char[]>(size);
+        buffer[(size - 1)] = 0;
+        vsnprintf(buffer.get(), size, fmt, arg_ptr);
         va_end(arg_ptr);
 
         fatalError(buffer.get());
